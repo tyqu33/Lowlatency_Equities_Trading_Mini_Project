@@ -1,0 +1,22 @@
+# clang-tidy config for hft. A pragmatic set for low-latency C++; tune as the code grows.
+Checks: >
+  -*,
+  bugprone-*,
+  cppcoreguidelines-*,
+  performance-*,
+  modernize-*,
+  readability-*,
+  portability-*,
+  -modernize-use-trailing-return-type,
+  -readability-magic-numbers,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic
+
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*/(libs|apps|tools)/.*'
+FormatStyle: file
+
+# Notes:
+#  - reinterpret_cast and pointer arithmetic are unavoidable in shm ring code; disabled above.
+#  - magic-number checks are off for now (lots of protocol constants); revisit later.

@@ -1,0 +1,29 @@
+# Example PARTICIPANT-side configuration (skeleton — values illustrative, not yet read by any code).
+
+[participant]
+account_id = 1001
+
+[cpu]
+fh_core   = 4                 # feed handler hot thread
+strat_core = 5                # strategy hot thread
+og_core   = 6                 # order gateway hot thread
+risk_core = 7                 # pre-trade risk hot thread
+
+[rings]
+fh_view_capacity  = 262144    # FH -> STRAT local book view
+intent_capacity   = 65536     # STRAT -> OG order intents
+risk_req_capacity = 65536     # OG -> RISK
+risk_resp_capacity = 65536    # RISK -> OG
+
+[risk]                        # SEC 15c3-5 pre-trade controls
+max_order_shares   = 10000    # single-order share cap
+max_order_notional = 1000000  # single-order notional cap (USD)
+fat_finger_collar_bps = 500   # reject if |limit - ref| / ref > 5%
+max_position_shares = 50000   # per-symbol position limit
+max_msgs_per_sec    = 100000  # message-rate throttle
+restricted = []               # hard-block tickers
+
+[strategy]
+type = "market_maker"         # quote around local BBO
+quote_size = 100
+spread_ticks = 2

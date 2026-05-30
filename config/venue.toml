@@ -1,0 +1,26 @@
+# Example VENUE-side configuration (skeleton — values illustrative, not yet read by any code).
+
+[venue]
+name = "SIMX"                 # simulated exchange id
+
+[cpu]
+me_core  = 2                  # isolated core for the matching-engine hot thread
+mdp_core = 3                  # isolated core for the market-data publisher hot thread
+# Pair with kernel args: isolcpus=2,3 nohz_full=2,3 + IRQ affinity away from these cores.
+
+[rings]                       # shared-memory ring sizing (slots are power-of-two)
+order_wire_capacity = 65536   # per-participant inbound (OUCH) ring
+exec_wire_capacity  = 65536   # per-participant outbound (OUCH responses) ring
+book_evt_capacity   = 262144  # ME -> MDP order-by-order event stream
+md_wire_capacity    = 262144  # MDP -> participants broadcast (SPMC)
+
+[matching]
+tick_size_bps = 1             # min price increment (sub-penny model uses 1/10000 USD units)
+enable_luld   = false         # V2: Limit Up-Limit Down bands
+
+[[symbols]]                   # symbol master entries (interned to uint32 ids at startup)
+ticker = "AAPL"
+lot    = 1
+[[symbols]]
+ticker = "MSFT"
+lot    = 1
