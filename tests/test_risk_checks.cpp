@@ -2,4 +2,6 @@
 // TODO: size/notional caps, fat-finger collar, position limit, restricted list, msg-rate.
 #include <gtest/gtest.h>
 
-TEST(RiskChecksTest, Placeholder) { SUCCEED() << "skeleton — implement me"; }
+TEST(RiskChecksTest, Placeholder) {
+    SUCCEED() << "skeleton — implement me";
+}

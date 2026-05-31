@@ -38,8 +38,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: clang-format check
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # Pinned via pip so the formatter is byte-identical everywhere (CI and local).
+      # Keep this version in sync with the formatter used locally.
+      - name: Install pinned clang-format
+        run: pip install "clang-format==22.1.5"
+      - name: Check formatting
         run: |
-          sudo apt-get update && sudo apt-get install -y clang-format
-          find libs apps tools tests benchmarks -name '*.hpp' -o -name '*.cpp' \
-            | xargs clang-format --dry-run --Werror
+          find libs apps tools tests benchmarks \( -name '*.hpp' -o -name '*.cpp' \) -print0 \
+            | xargs -0 clang-format --dry-run --Werror

@@ -22,6 +22,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# All executables land in build/bin/ for predictable run paths.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 # Default to an optimized-with-debug-info build for single-config generators.
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
@@ -38,6 +41,7 @@ include(Dependencies)       # fetches gtest/benchmark when tests/benchmarks are 
 add_subdirectory(libs/common)     # hft::common   — Price, symbol, types, time, cpu
 add_subdirectory(libs/ipc)        # hft::ipc       — SPSC/SPMC rings + shared memory
 add_subdirectory(libs/protocol)   # hft::protocol  — OUCH / ITCH / risk wire structs
+add_subdirectory(libs/appkit)     # hft::appkit    — CLI (CLI11) + TOML (toml++) + fmt plumbing
 
 # ---------------------------------------------------------------------------
 # VENUE side (the simulated exchange)
@@ -57,6 +61,7 @@ add_subdirectory(apps/participant/og)     # OG    — order gateway + OMS (= UFT
 # Tools
 # ---------------------------------------------------------------------------
 add_subdirectory(tools/sim_client)        # background order-flow generator
+add_subdirectory(tools/config_demo)       # smoke test for the CLI / TOML / fmt tooling
 
 # ---------------------------------------------------------------------------
 # Tests / benchmarks (opt-in; pull external deps only when enabled)

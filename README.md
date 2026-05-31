@@ -49,14 +49,16 @@ systems-level understanding of where latency lives. It also yields the key HFT m
 ## Build
 
 ```bash
-# Skeleton build (no external deps, offline):
+# Configure (first run fetches fmt / toml++ / CLI11 via FetchContent, then cached):
 cmake -S . -B build
 cmake --build build -j
+./build/bin/hft_config_demo --config config/venue.toml -v   # tooling smoke test
 
-# With tests (fetches GoogleTest) and benchmarks (fetches Google Benchmark):
+# With tests (GoogleTest + GoogleMock) and benchmarks (Google Benchmark):
 cmake -S . -B build -DHFT_BUILD_TESTS=ON -DHFT_BUILD_BENCHMARKS=ON
 cmake --build build -j
 ctest --test-dir build --output-on-failure
+./build/bin/hft_benchmarks
 ```
 
 Useful options: `-DHFT_ENABLE_SANITIZERS=ON` (ASan/UBSan), `-DHFT_NATIVE_ARCH=ON` (`-march=native`).
@@ -75,12 +77,13 @@ hft/
 ├── libs/                    # shared libraries
 │   ├── common/              #   hft::common   — Price, symbol interning, types, time, cpu
 │   ├── ipc/                 #   hft::ipc       — lock-free SPSC/SPMC rings + shared memory
-│   └── protocol/            #   hft::protocol  — OUCH / ITCH / risk wire structs (header-only)
+│   ├── protocol/            #   hft::protocol  — OUCH / ITCH / risk wire structs (header-only)
+│   └── appkit/              #   hft::appkit    — CLI (CLI11) + TOML (toml++) + fmt plumbing
 ├── apps/
 │   ├── venue/{me,mdp}/       # VENUE: matching engine, market-data publisher
 │   └── participant/{fh,strat,risk,og}/   # PARTICIPANT: feed handler, strategy, risk, gateway
-├── tools/sim_client/        # background order-flow generator
-├── tests/                   # GoogleTest unit tests
+├── tools/                   # sim_client (order-flow gen) + config_demo (tooling smoke test)
+├── tests/                   # GoogleTest + GoogleMock unit tests
 └── benchmarks/              # Google Benchmark microbenchmarks
 ```
 
