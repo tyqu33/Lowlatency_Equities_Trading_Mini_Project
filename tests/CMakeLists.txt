@@ -4,6 +4,7 @@
 include(GoogleTest)
 add_executable(hft_tests
     test_price.cpp
+    test_bits.cpp
     test_spsc_ring.cpp
     test_order_book.cpp
     test_risk_checks.cpp
