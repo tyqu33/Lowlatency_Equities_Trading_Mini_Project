@@ -12,8 +12,16 @@ The two sides communicate across a realistic protocol boundary — **OUCH** for 
 for market data. Each side talks internally over hand-rolled lock-free **SPSC/SPMC** rings in shared
 memory.
 
-> **Status: skeleton.** Architecture and scaffolding are in place; component implementations are
-> stubs (`// TODO`). See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design and
+> **Status: in progress — building bottom-up.** The shared foundation is implemented and tested;
+> the components above it are being written on top of it, in the order given by the roadmap below.
+>
+> | | |
+> |---|---|
+> | **Implemented, under test** | `hft::common` — fixed-point `Price` (tick arithmetic, parse/format, floor/ceil-to-tick) and power-of-two/alignment helpers. 29 GoogleTest cases, including a property-based sweep over the rounding invariants. Builds clean with warnings-as-errors; ASan/UBSan and GitHub Actions CI wired up. |
+> | **In progress** | `ME` — price-time-priority limit order book (the matching core everything else hangs off). |
+> | **Designed, not yet built** | `MDP` / `FH` / `STRAT` / `RISK` / `OG`, the OUCH+ITCH protocol boundary, and the shared-memory transport. Interfaces and wire structs are in place; bodies are stubs. |
+>
+> See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design and
 > [`docs/adr/`](docs/adr) for the design decisions.
 
 ---
@@ -101,14 +109,16 @@ Full plan and acceptance criteria: [`docs/ARCHITECTURE.md` §8](docs/ARCHITECTUR
 
 ## Benchmarks
 
-Measured percentiles will be published here (currently placeholders — the skeleton has no
-implementation to measure):
+Nothing is published here yet — there is no measured number in this repository, and none will be
+quoted until the harness produces one.
 
-| Metric | p50 | p99 | p99.9 |
-|---|---|---|---|
-| SPSC ring round-trip | TBD | TBD | TBD |
-| tick-to-trade (ITCH-in → OUCH-out) | TBD | TBD | TBD |
-| venue order → ack | TBD | TBD | TBD |
+The three metrics this project exists to measure, once the corresponding components are built:
+
+- **tick-to-trade** — ITCH-in → strategy decision → OUCH-out (the participant-side headline number)
+- **venue order → ack** — OUCH-in → match → ack-out
+- **SPSC ring round-trip** — the single-hop IPC cost that bounds both of the above
+
+Each will be reported as p50 / p99 / p99.9 from HdrHistogram, alongside the load that generated it.
 
 ## License
 
