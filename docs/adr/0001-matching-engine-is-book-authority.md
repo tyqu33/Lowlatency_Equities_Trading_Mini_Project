@@ -29,7 +29,7 @@ order-by-order event stream; a market-data publisher translates it into ITCH and
 - **+** Two books *on purpose*: the gap between the venue's truth and the participant's
   latency-delayed local book (queue-position uncertainty) is the essence of HFT and a deliberate
   teaching point.
-- **+** Mirrors the real exchange (matching → MD publisher) ↔ participant (feed handler → local
+- **+** Mirrors the real exchange (matching → MD publisher) → participant (feed handler → local
   book) pipeline.
 - **+** `sim_client` can be swapped for real strategy processes with no architectural change.
 - **−** Gap/torn-read handling needed on the broadcast ring (mitigated by L2 snapshot resync).
