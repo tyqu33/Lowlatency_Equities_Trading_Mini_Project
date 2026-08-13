@@ -41,6 +41,7 @@ include(Dependencies)       # fetches gtest/benchmark when tests/benchmarks are 
 add_subdirectory(libs/common)     # hft::common   — Price, symbol, types, time, cpu
 add_subdirectory(libs/ipc)        # hft::ipc       — SPSC/SPMC rings + shared memory
 add_subdirectory(libs/protocol)   # hft::protocol  — OUCH / ITCH / risk wire structs
+add_subdirectory(libs/matching)   # hft::matching  — price-time-priority limit order book
 add_subdirectory(libs/appkit)     # hft::appkit    — CLI (CLI11) + TOML (toml++) + fmt plumbing
 
 # ---------------------------------------------------------------------------

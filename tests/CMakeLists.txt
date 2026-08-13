@@ -10,7 +10,7 @@ add_executable(hft_tests
     test_risk_checks.cpp
     test_gmock_example.cpp)
 target_link_libraries(hft_tests PRIVATE
-    hft::common hft::ipc hft::protocol
+    hft::common hft::ipc hft::protocol hft::matching
     GTest::gmock_main)
 hft_set_warnings(hft_tests)
 gtest_discover_tests(hft_tests)
