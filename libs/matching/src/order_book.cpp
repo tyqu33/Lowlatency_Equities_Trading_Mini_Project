@@ -74,9 +74,9 @@ common::Qty OrderBook::submit(const OrderRequest& req, std::vector<Fill>& fills)
         Level& l = buy[bid_price];
         RestingOrder order; order.resting = req.ref; order.remainQty = remaining; //req.qty;
         l.total_qty += remaining;
-        l.orders.push_back(order);
+        l.orders.push_back(order);    // std::list 分配一个节点     <- malloc
         Locator loc; loc.side = common::Side::Buy; loc.price = req.limit_price; loc.it = --(l.orders.end());
-        refMap[req.ref] = loc;
+        refMap[req.ref] = loc;        // unordered_map 分配一个节点 <- malloc
 
         buy_orders_count++;
         return remaining; 
