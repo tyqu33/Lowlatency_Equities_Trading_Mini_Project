@@ -34,18 +34,8 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
-  format-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      # Pinned via pip so the formatter is byte-identical everywhere (CI and local).
-      # Keep this version in sync with the formatter used locally.
-      - name: Install pinned clang-format
-        run: pip install "clang-format==22.1.5"
-      - name: Check formatting
-        run: |
-          find libs apps tools tests benchmarks \( -name '*.hpp' -o -name '*.cpp' \) -print0 \
-            | xargs -0 clang-format --dry-run --Werror
+# There is deliberately no formatting job. `.clang-format` is kept as a hint for editors that
+# want one, but nothing enforces it: the layout in this repository is chosen for readability by
+# the person maintaining it, and a formatter that reflows it into something harder to read is
+# costing more than the consistency is worth. CI gates what can actually break — the build and
+# the tests.
