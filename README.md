@@ -17,8 +17,8 @@ memory.
 >
 > | | |
 > |---|---|
-> | **Implemented, under test** | `hft::common` — fixed-point `Price` (tick arithmetic, parse/format, floor/ceil-to-tick) and power-of-two/alignment helpers. 29 GoogleTest cases, including a property-based sweep over the rounding invariants. Builds clean with warnings-as-errors; ASan/UBSan and GitHub Actions CI wired up. |
-> | **In progress** | `ME` — price-time-priority limit order book (the matching core everything else hangs off). |
+> | **Implemented, under test** | `hft::matching` — price-time-priority limit order book: add / cancel / match with partial fills, O(1) cancel, fills priced at the resting order. `hft::common` — fixed-point `Price` (tick arithmetic, parse/format, floor/ceil-to-tick) and power-of-two/alignment helpers. 56 GoogleTest cases, including property-based sweeps over the rounding invariants and a randomised sweep asserting the book never crosses. Builds clean with warnings-as-errors; ASan/UBSan and GitHub Actions CI wired up. |
+> | **In progress** | Benchmark harness for the book, then a tick-indexed replacement for the `std::map` price levels — measured before and after. |
 > | **Designed, not yet built** | `MDP` / `FH` / `STRAT` / `RISK` / `OG`, the OUCH+ITCH protocol boundary, and the shared-memory transport. Interfaces and wire structs are in place; bodies are stubs. |
 >
 > See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design and
@@ -86,6 +86,7 @@ hft/
 │   ├── common/              #   hft::common   — Price, symbol interning, types, time, cpu
 │   ├── ipc/                 #   hft::ipc       — lock-free SPSC/SPMC rings + shared memory
 │   ├── protocol/            #   hft::protocol  — OUCH / ITCH / risk wire structs (header-only)
+│   ├── matching/            #   hft::matching  — price-time-priority limit order book
 │   └── appkit/              #   hft::appkit    — CLI (CLI11) + TOML (toml++) + fmt plumbing
 ├── apps/
 │   ├── venue/{me,mdp}/       # VENUE: matching engine, market-data publisher
