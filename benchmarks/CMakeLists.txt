@@ -7,6 +7,6 @@ add_executable(hft_benchmarks
     bench_matching.cpp
     bench_tick_to_trade.cpp)
 target_link_libraries(hft_benchmarks PRIVATE
-    hft::common hft::ipc hft::protocol
+    hft::common hft::ipc hft::protocol hft::matching
     benchmark::benchmark_main)
 hft_set_warnings(hft_benchmarks)
