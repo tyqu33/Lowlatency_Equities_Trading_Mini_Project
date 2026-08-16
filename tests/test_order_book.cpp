@@ -1,12 +1,20 @@
-// tests/test_order_book.cpp — unit tests for hft::matching::OrderBook.
+// tests/test_order_book.cpp — the shared specification for every order book implementation.
 //
-// These are the specification. They are written before the implementation and will stay red until
-// it exists; each one going green is a checkpoint. Work them roughly top to bottom — the sections
-// are ordered so that later ones depend on earlier ones already working.
+// Every case below runs TWICE, once against each type in `BookImpls`: the std::map baseline and
+// the array-indexed replacement. That is the point. An optimisation is only worth anything if the
+// thing it optimised still behaves identically, and the cheapest way to hold that line is to give
+// both implementations the same suite rather than a parallel one that can drift.
+//
+// Adding an implementation means adding it to `BookImpls`; nothing else here changes.
 //
 //   Run all of them:   ./build/bin/hft_tests --gtest_filter='OrderBook*'
-//   Run one section:   ./build/bin/hft_tests --gtest_filter='OrderBookCancel.*'
-//   Run one case:      ./build/bin/hft_tests --gtest_filter='*RestsRemainderAtItsOwnLimit'
+//   One implementation:./build/bin/hft_tests --gtest_filter='*/1.*'      (0 = map, 1 = array)
+//   One section:       ./build/bin/hft_tests --gtest_filter='OrderBookCancel/*'
+//   One case:          ./build/bin/hft_tests --gtest_filter='*RestsRemainderAtItsOwnLimit*'
+//
+// All prices here sit on the one-cent tick grid. That is not decoration: the array implementation
+// indexes levels by grid step and rejects anything off it, so an off-grid price would make the two
+// implementations legitimately disagree and the shared suite meaningless.
 //
 // The three cases most likely to catch a subtly wrong implementation:
 //   - FillsAtRestingPrice            — the aggressor gets the price improvement, not the resting side
@@ -22,6 +30,7 @@
 
 #include "hft/common/price.hpp"
 #include "hft/common/types.hpp"
+#include "hft/matching/array_order_book.hpp"
 #include "hft/matching/order_book.hpp"
 
 using hft::common::OrderRefNum;
@@ -30,9 +39,13 @@ using hft::common::Price;
 using hft::common::Qty;
 using hft::common::Side;
 using hft::common::TimeInForce;
+using hft::matching::ArrayOrderBook;
 using hft::matching::Fill;
 using hft::matching::OrderBook;
 using hft::matching::OrderRequest;
+
+// Every implementation of the book. Index 0 is the baseline, 1 the array version.
+using BookImpls = ::testing::Types<OrderBook, ArrayOrderBook>;
 
 namespace {
 
@@ -55,19 +68,49 @@ OrderRequest limit(OrderRefNum ref, Side side, std::int64_t price_ticks, Qty qty
 }
 
 // Submit and discard the fills — for setting up book state.
-Qty rest(OrderBook& book, const OrderRequest& req) {
+template <typename Book>
+Qty rest(Book& book, const OrderRequest& req) {
     std::vector<Fill> fills;
     return book.submit(req, fills);
 }
 
+// A price `levels` one-cent steps away from $100.0000, so randomised traffic stays on the grid.
+std::int64_t grid_price(int levels) {
+    return kPx100_00 + static_cast<std::int64_t>(levels) * 100;
+}
+
 }  // namespace
+
+// A typed suite needs a fixture template even when it holds no state; the test body reaches the
+// implementation under test through `TypeParam`.
+template <typename Book>
+class OrderBookBasics : public ::testing::Test {};
+template <typename Book>
+class OrderBookResting : public ::testing::Test {};
+template <typename Book>
+class OrderBookMatching : public ::testing::Test {};
+template <typename Book>
+class OrderBookCancel : public ::testing::Test {};
+template <typename Book>
+class OrderBookLevels : public ::testing::Test {};
+template <typename Book>
+class OrderBookInvariants : public ::testing::Test {};
+
+// Each suite is instantiated once per implementation. GoogleTest names the results
+// `SuiteName/0.CaseName` for the first type in BookImpls and `SuiteName/1.CaseName` for the second.
+TYPED_TEST_SUITE(OrderBookBasics, BookImpls);
+TYPED_TEST_SUITE(OrderBookResting, BookImpls);
+TYPED_TEST_SUITE(OrderBookMatching, BookImpls);
+TYPED_TEST_SUITE(OrderBookCancel, BookImpls);
+TYPED_TEST_SUITE(OrderBookLevels, BookImpls);
+TYPED_TEST_SUITE(OrderBookInvariants, BookImpls);
 
 // ============================================================================
 // An empty book
 // ============================================================================
 
-TEST(OrderBookBasics, StartsEmpty) {
-    OrderBook book;
+TYPED_TEST(OrderBookBasics, StartsEmpty) {
+    TypeParam book;
     EXPECT_TRUE(book.empty());
     EXPECT_EQ(book.order_count(), 0u);
     EXPECT_FALSE(book.best_bid().has_value());
@@ -76,8 +119,8 @@ TEST(OrderBookBasics, StartsEmpty) {
     EXPECT_EQ(book.qty_at(Side::Sell, Price::from_ticks(kPx100_00)), 0);
 }
 
-TEST(OrderBookBasics, CancelOnEmptyBookReportsNothingRemoved) {
-    OrderBook book;
+TYPED_TEST(OrderBookBasics, CancelOnEmptyBookReportsNothingRemoved) {
+    TypeParam book;
     EXPECT_EQ(book.cancel(12345), 0);
 }
 
@@ -85,8 +128,8 @@ TEST(OrderBookBasics, CancelOnEmptyBookReportsNothingRemoved) {
 // Resting: an order that cannot trade goes into the book
 // ============================================================================
 
-TEST(OrderBookResting, UnmatchableBuyRests) {
-    OrderBook book;
+TYPED_TEST(OrderBookResting, UnmatchableBuyRests) {
+    TypeParam book;
     std::vector<Fill> fills;
 
     EXPECT_EQ(book.submit(limit(1, Side::Buy, kPx100_00, 500), fills), 500)
@@ -100,8 +143,8 @@ TEST(OrderBookResting, UnmatchableBuyRests) {
     EXPECT_EQ(book.qty_at(Side::Buy, Price::from_ticks(kPx100_00)), 500);
 }
 
-TEST(OrderBookResting, UnmatchableSellRests) {
-    OrderBook book;
+TYPED_TEST(OrderBookResting, UnmatchableSellRests) {
+    TypeParam book;
     EXPECT_EQ(rest(book, limit(1, Side::Sell, kPx100_01, 300)), 300);
 
     EXPECT_EQ(book.best_ask(), Price::from_ticks(kPx100_01));
@@ -109,8 +152,8 @@ TEST(OrderBookResting, UnmatchableSellRests) {
     EXPECT_EQ(book.qty_at(Side::Sell, Price::from_ticks(kPx100_01)), 300);
 }
 
-TEST(OrderBookResting, BestBidIsHighestBestAskIsLowest) {
-    OrderBook book;
+TYPED_TEST(OrderBookResting, BestBidIsHighestBestAskIsLowest) {
+    TypeParam book;
     rest(book, limit(1, Side::Buy, kPx99_98, 100));
     rest(book, limit(2, Side::Buy, kPx100_00, 100));  // better bid, submitted second
     rest(book, limit(3, Side::Buy, kPx99_99, 100));
@@ -123,8 +166,8 @@ TEST(OrderBookResting, BestBidIsHighestBestAskIsLowest) {
     EXPECT_EQ(book.order_count(), 5u);
 }
 
-TEST(OrderBookResting, QtyAtAggregatesOrdersOnTheSameLevel) {
-    OrderBook book;
+TYPED_TEST(OrderBookResting, QtyAtAggregatesOrdersOnTheSameLevel) {
+    TypeParam book;
     rest(book, limit(1, Side::Buy, kPx100_00, 100));
     rest(book, limit(2, Side::Buy, kPx100_00, 250));
     rest(book, limit(3, Side::Buy, kPx99_99, 700));
@@ -135,8 +178,8 @@ TEST(OrderBookResting, QtyAtAggregatesOrdersOnTheSameLevel) {
     EXPECT_EQ(book.order_count(), 3u);
 }
 
-TEST(OrderBookResting, SidesAreSeparate) {
-    OrderBook book;
+TYPED_TEST(OrderBookResting, SidesAreSeparate) {
+    TypeParam book;
     rest(book, limit(1, Side::Buy, kPx99_99, 100));
     rest(book, limit(2, Side::Sell, kPx100_01, 100));
 
@@ -149,8 +192,8 @@ TEST(OrderBookResting, SidesAreSeparate) {
 // Price priority: match the best price on the opposite side first
 // ============================================================================
 
-TEST(OrderBookMatching, BuyTakesLowestAskFirst) {
-    OrderBook book;
+TYPED_TEST(OrderBookMatching, BuyTakesLowestAskFirst) {
+    TypeParam book;
     rest(book, limit(1, Side::Sell, kPx100_02, 100));
     rest(book, limit(2, Side::Sell, kPx100_00, 100));  // best ask
     rest(book, limit(3, Side::Sell, kPx100_01, 100));
@@ -164,8 +207,8 @@ TEST(OrderBookMatching, BuyTakesLowestAskFirst) {
     EXPECT_EQ(fills[0].qty, 100);
 }
 
-TEST(OrderBookMatching, SellTakesHighestBidFirst) {
-    OrderBook book;
+TYPED_TEST(OrderBookMatching, SellTakesHighestBidFirst) {
+    TypeParam book;
     rest(book, limit(1, Side::Buy, kPx99_98, 100));
     rest(book, limit(2, Side::Buy, kPx100_00, 100));  // best bid
     rest(book, limit(3, Side::Buy, kPx99_99, 100));
@@ -178,8 +221,8 @@ TEST(OrderBookMatching, SellTakesHighestBidFirst) {
     EXPECT_EQ(fills[0].price, Price::from_ticks(kPx100_00));
 }
 
-TEST(OrderBookMatching, WalksMultipleLevelsInPriceOrder) {
-    OrderBook book;
+TYPED_TEST(OrderBookMatching, WalksMultipleLevelsInPriceOrder) {
+    TypeParam book;
     rest(book, limit(1, Side::Sell, kPx100_00, 100));
     rest(book, limit(2, Side::Sell, kPx100_01, 200));
     rest(book, limit(3, Side::Sell, kPx100_02, 400));
@@ -199,8 +242,8 @@ TEST(OrderBookMatching, WalksMultipleLevelsInPriceOrder) {
     EXPECT_EQ(book.best_ask(), Price::from_ticks(kPx100_02));
 }
 
-TEST(OrderBookMatching, DoesNotTradeThroughTheLimit) {
-    OrderBook book;
+TYPED_TEST(OrderBookMatching, DoesNotTradeThroughTheLimit) {
+    TypeParam book;
     rest(book, limit(1, Side::Sell, kPx100_02, 100));
 
     std::vector<Fill> fills;
@@ -212,8 +255,8 @@ TEST(OrderBookMatching, DoesNotTradeThroughTheLimit) {
     EXPECT_EQ(book.best_ask(), Price::from_ticks(kPx100_02));
 }
 
-TEST(OrderBookMatching, EqualPricesDoCross) {
-    OrderBook book;
+TYPED_TEST(OrderBookMatching, EqualPricesDoCross) {
+    TypeParam book;
     rest(book, limit(1, Side::Sell, kPx100_00, 100));
 
     std::vector<Fill> fills;
@@ -228,8 +271,8 @@ TEST(OrderBookMatching, EqualPricesDoCross) {
 // Time priority within a level
 // ============================================================================
 
-TEST(OrderBookMatching, TimePriorityWithinLevel) {
-    OrderBook book;
+TYPED_TEST(OrderBookMatching, TimePriorityWithinLevel) {
+    TypeParam book;
     rest(book, limit(1, Side::Sell, kPx100_00, 100));  // first in
     rest(book, limit(2, Side::Sell, kPx100_00, 100));
     rest(book, limit(3, Side::Sell, kPx100_00, 100));
@@ -249,8 +292,8 @@ TEST(OrderBookMatching, TimePriorityWithinLevel) {
     EXPECT_EQ(book.order_count(), 1u) << "the first two left the book";
 }
 
-TEST(OrderBookMatching, PartiallyFilledOrderKeepsItsPlaceInLine) {
-    OrderBook book;
+TYPED_TEST(OrderBookMatching, PartiallyFilledOrderKeepsItsPlaceInLine) {
+    TypeParam book;
     rest(book, limit(1, Side::Sell, kPx100_00, 100));
     rest(book, limit(2, Side::Sell, kPx100_00, 100));
 
@@ -271,8 +314,8 @@ TEST(OrderBookMatching, PartiallyFilledOrderKeepsItsPlaceInLine) {
 // Fill pricing
 // ============================================================================
 
-TEST(OrderBookMatching, FillsAtRestingPrice) {
-    OrderBook book;
+TYPED_TEST(OrderBookMatching, FillsAtRestingPrice) {
+    TypeParam book;
     rest(book, limit(1, Side::Sell, kPx100_00, 100));  // resting first, sets the terms
 
     std::vector<Fill> fills;
@@ -285,8 +328,8 @@ TEST(OrderBookMatching, FillsAtRestingPrice) {
     EXPECT_EQ(fills[0].resting, 1u);
 }
 
-TEST(OrderBookMatching, FillsAtRestingPriceWhenSellerIsAggressor) {
-    OrderBook book;
+TYPED_TEST(OrderBookMatching, FillsAtRestingPriceWhenSellerIsAggressor) {
+    TypeParam book;
     rest(book, limit(1, Side::Buy, kPx100_00, 100));
 
     std::vector<Fill> fills;
@@ -303,8 +346,8 @@ TEST(OrderBookMatching, FillsAtRestingPriceWhenSellerIsAggressor) {
 // Partial fills and the resting remainder
 // ============================================================================
 
-TEST(OrderBookMatching, IncomingSmallerThanRestingLeavesRestingReduced) {
-    OrderBook book;
+TYPED_TEST(OrderBookMatching, IncomingSmallerThanRestingLeavesRestingReduced) {
+    TypeParam book;
     rest(book, limit(1, Side::Sell, kPx100_00, 500));
 
     std::vector<Fill> fills;
@@ -316,8 +359,8 @@ TEST(OrderBookMatching, IncomingSmallerThanRestingLeavesRestingReduced) {
     EXPECT_EQ(book.order_count(), 1u);
 }
 
-TEST(OrderBookMatching, RestsRemainderAtItsOwnLimit) {
-    OrderBook book;
+TYPED_TEST(OrderBookMatching, RestsRemainderAtItsOwnLimit) {
+    TypeParam book;
     rest(book, limit(1, Side::Sell, kPx100_00, 100));
 
     std::vector<Fill> fills;
@@ -334,8 +377,8 @@ TEST(OrderBookMatching, RestsRemainderAtItsOwnLimit) {
 // Cancel
 // ============================================================================
 
-TEST(OrderBookCancel, RemovesRestingOrderAndReportsItsQuantity) {
-    OrderBook book;
+TYPED_TEST(OrderBookCancel, RemovesRestingOrderAndReportsItsQuantity) {
+    TypeParam book;
     rest(book, limit(1, Side::Buy, kPx100_00, 400));
 
     EXPECT_EQ(book.cancel(1), 400);
@@ -344,24 +387,24 @@ TEST(OrderBookCancel, RemovesRestingOrderAndReportsItsQuantity) {
     EXPECT_EQ(book.qty_at(Side::Buy, Price::from_ticks(kPx100_00)), 0);
 }
 
-TEST(OrderBookCancel, UnknownRefReportsNothingRemoved) {
-    OrderBook book;
+TYPED_TEST(OrderBookCancel, UnknownRefReportsNothingRemoved) {
+    TypeParam book;
     rest(book, limit(1, Side::Buy, kPx100_00, 400));
 
     EXPECT_EQ(book.cancel(999), 0) << "not an error — the order may never have existed";
     EXPECT_EQ(book.order_count(), 1u) << "and the book is untouched";
 }
 
-TEST(OrderBookCancel, TwiceReportsNothingTheSecondTime) {
-    OrderBook book;
+TYPED_TEST(OrderBookCancel, TwiceReportsNothingTheSecondTime) {
+    TypeParam book;
     rest(book, limit(1, Side::Buy, kPx100_00, 400));
 
     EXPECT_EQ(book.cancel(1), 400);
     EXPECT_EQ(book.cancel(1), 0) << "gone is gone";
 }
 
-TEST(OrderBookCancel, AfterPartialFillReportsOnlyWhatIsLeft) {
-    OrderBook book;
+TYPED_TEST(OrderBookCancel, AfterPartialFillReportsOnlyWhatIsLeft) {
+    TypeParam book;
     rest(book, limit(1, Side::Sell, kPx100_00, 1000));
 
     std::vector<Fill> fills;
@@ -371,8 +414,8 @@ TEST(OrderBookCancel, AfterPartialFillReportsOnlyWhatIsLeft) {
     EXPECT_TRUE(book.empty());
 }
 
-TEST(OrderBookCancel, FilledOrderIsNoLongerCancellable) {
-    OrderBook book;
+TYPED_TEST(OrderBookCancel, FilledOrderIsNoLongerCancellable) {
+    TypeParam book;
     rest(book, limit(1, Side::Sell, kPx100_00, 100));
 
     std::vector<Fill> fills;
@@ -382,8 +425,8 @@ TEST(OrderBookCancel, FilledOrderIsNoLongerCancellable) {
     EXPECT_EQ(book.cancel(2), 0) << "the aggressor never rested";
 }
 
-TEST(OrderBookCancel, LeavesSiblingsOnTheSameLevelAlone) {
-    OrderBook book;
+TYPED_TEST(OrderBookCancel, LeavesSiblingsOnTheSameLevelAlone) {
+    TypeParam book;
     rest(book, limit(1, Side::Buy, kPx100_00, 100));
     rest(book, limit(2, Side::Buy, kPx100_00, 250));
     rest(book, limit(3, Side::Buy, kPx100_00, 50));
@@ -405,8 +448,8 @@ TEST(OrderBookCancel, LeavesSiblingsOnTheSameLevelAlone) {
 // Level lifecycle — an emptied level must disappear
 // ============================================================================
 
-TEST(OrderBookLevels, CancellingTheLastOrderRemovesTheLevel) {
-    OrderBook book;
+TYPED_TEST(OrderBookLevels, CancellingTheLastOrderRemovesTheLevel) {
+    TypeParam book;
     rest(book, limit(1, Side::Buy, kPx100_00, 100));
     rest(book, limit(2, Side::Buy, kPx99_99, 100));
 
@@ -416,8 +459,8 @@ TEST(OrderBookLevels, CancellingTheLastOrderRemovesTheLevel) {
     EXPECT_EQ(book.qty_at(Side::Buy, Price::from_ticks(kPx100_00)), 0);
 }
 
-TEST(OrderBookLevels, FullyConsumedLevelRemovesItself) {
-    OrderBook book;
+TYPED_TEST(OrderBookLevels, FullyConsumedLevelRemovesItself) {
+    TypeParam book;
     rest(book, limit(1, Side::Sell, kPx100_00, 100));
     rest(book, limit(2, Side::Sell, kPx100_01, 100));
 
@@ -429,8 +472,8 @@ TEST(OrderBookLevels, FullyConsumedLevelRemovesItself) {
     EXPECT_EQ(book.order_count(), 1u);
 }
 
-TEST(OrderBookLevels, BookReturnsToEmptyAfterEverythingLeaves) {
-    OrderBook book;
+TYPED_TEST(OrderBookLevels, BookReturnsToEmptyAfterEverythingLeaves) {
+    TypeParam book;
     rest(book, limit(1, Side::Buy, kPx99_99, 100));
     rest(book, limit(2, Side::Sell, kPx100_01, 100));
 
@@ -451,10 +494,10 @@ TEST(OrderBookLevels, BookReturnsToEmptyAfterEverythingLeaves) {
 // be unable to reach. This is the test that catches the bugs the hand-written cases above do not
 // anticipate — a level left behind empty, a stale best price, a ref index out of step with the
 // levels. Seeded, so a failure reproduces exactly.
-TEST(OrderBookInvariants, HoldUnderRandomTraffic) {
-    OrderBook book;
+TYPED_TEST(OrderBookInvariants, HoldUnderRandomTraffic) {
+    TypeParam book;
     std::mt19937 rng(20260812);
-    std::uniform_int_distribution<int> price_dist(999'700, 1'000'300);
+    std::uniform_int_distribution<int> level_dist(-3, 3);  // 见下方 grid_price()
     std::uniform_int_distribution<Qty> qty_dist(1, 500);
     std::uniform_int_distribution<int> coin(0, 1);
 
@@ -480,7 +523,7 @@ TEST(OrderBookInvariants, HoldUnderRandomTraffic) {
         } else {
             const OrderRefNum ref = next_ref++;
             const Side side = coin(rng) == 0 ? Side::Buy : Side::Sell;
-            if (book.submit(limit(ref, side, price_dist(rng), qty_dist(rng)), fills) > 0) {
+            if (book.submit(limit(ref, side, grid_price(level_dist(rng)), qty_dist(rng)), fills) > 0) {
                 live.push_back(ref);
             }
         }
