@@ -182,11 +182,11 @@ common::Qty ArrayOrderBook::submit(const OrderRequest& req, std::vector<Fill>& f
     if(req.side == common::Side::Buy){
         Level& l = buy_levels_[idx];
         l.total_qty += remaining;
-        l.orders.push_back({req.ref, remaining});
+        l.orders.push_back({req.ref, remaining});            // std::list 分配一个节点     <- malloc
 
         buy_occupied_[idx/64] |= (1ULL << (idx % 64));
         buy_orders_count++;
-        refMap[req.ref] = {req.side, idx, --l.orders.end()};
+        refMap[req.ref] = {req.side, idx, --l.orders.end()}; // unordered_map 分配一个节点 <- malloc
         
     } else if(req.side == common::Side::Sell) {
         Level& l = sell_levels_[idx];

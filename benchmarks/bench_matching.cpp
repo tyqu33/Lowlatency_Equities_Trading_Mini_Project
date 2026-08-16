@@ -1,5 +1,27 @@
-// benchmarks/bench_matching.cpp — microbenchmarks for hft::matching::OrderBook.
+// benchmarks/bench_matching.cpp — microbenchmarks for the two order book implementations.
 // No BENCHMARK_MAIN() here — main() comes from benchmark::benchmark_main (linked in CMake).
+//
+// ============================================================================
+// TWO IMPLEMENTATIONS, ONE WORKLOAD
+// ============================================================================
+//
+// Every benchmark below is a template, registered twice: once against OrderBook (a std::map of
+// price levels) and once against ArrayOrderBook (a flat tick-indexed array plus an occupancy
+// bitmap). Same fixture, same seed, same order flow, same batch size. THE ONLY VARIABLE IS THE
+// PRICE -> LEVEL CONTAINER, which is what makes the delta attributable to anything at all.
+//
+// docs/BENCHMARK-orderbook-v1.md committed three predictions before v2 was written:
+//
+//   1. `cancel` should flatten, with the largest gain at the largest depth. The O(log n) descent
+//      becomes an array index and the pointer chasing that overflows cache at depth 1000 goes with
+//      it. "If it does not, the analysis above is wrong somewhere."
+//   2. The resting path should barely move. Its cost is two mallocs, and swapping the price
+//      container does not remove them.
+//   3. The crossing path should stay roughly where it is — at 13.7ns it is already doing almost
+//      nothing but arithmetic.
+//
+// Read the output against those three. A prediction that turns out wrong is worth more here than
+// one that turns out right, because it is the one that teaches you something about the machine.
 //
 // ============================================================================
 // THE WORKLOAD — read this before quoting any number below
@@ -27,6 +49,10 @@
 //
 // Everything else (round-lot sizes, a single symbol, one price grid) is simplification that does
 // not move the comparison.
+//
+// Every price this workload generates is a whole number of cents inside ArrayOrderBook's window
+// ($79.52-$120.47): the deepest fixture reaches $90.00-$110.00 and the crossing orders price at
+// $110.00. That is checked rather than assumed — see the fixture guard below.
 //
 // ============================================================================
 // WHY OPERATIONS ARE TIMED IN BATCHES, NOT INDIVIDUALLY
@@ -64,7 +90,17 @@
 // READING THE OUTPUT
 // ============================================================================
 //
-//   Run:  ./build/bin/hft_benchmarks --benchmark_filter='OrderBook'
+//   Run everything:   ./build/bin/hft_benchmarks --benchmark_filter='OrderBook'
+//   One operation:    ./build/bin/hft_benchmarks --benchmark_filter='Cancel'
+//   One implementation:
+//                     ./build/bin/hft_benchmarks --benchmark_filter='ArrayOrderBook'
+//
+// Benchmark names carry the template argument, so a row reads
+//
+//   BM_Cancel<hft::matching::ArrayOrderBook>/1000
+//                                            ^^^^ depth: levels per side
+//
+// and the v1/v2 pair for a given operation appears as two blocks of three depths.
 //
 //   Time / CPU        per BATCH of kBatchSize operations — divide by it for per-op cost
 //   items_per_second  already per-operation
@@ -82,11 +118,14 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <random>
 #include <vector>
 
 #include "hft/common/price.hpp"
 #include "hft/common/types.hpp"
+#include "hft/matching/array_order_book.hpp"
 #include "hft/matching/order_book.hpp"
 
 namespace {
@@ -97,6 +136,7 @@ using hft::common::Price;
 using hft::common::Qty;
 using hft::common::Side;
 using hft::common::TimeInForce;
+using hft::matching::ArrayOrderBook;
 using hft::matching::Fill;
 using hft::matching::OrderBook;
 using hft::matching::OrderRequest;
@@ -187,8 +227,12 @@ OrderRequest limit_order(OrderRefNum ref, Side side, std::int64_t price_ticks, Q
 // straddling the reference price. Records every resting ref (shuffled) so cancel benchmarks do not
 // get to walk the book in insertion order, and the total ask quantity so the matching benchmark
 // knows how much it can eat before a rebuild is due.
+//
+// Templated on the book type so both implementations run against a byte-identical fixture: the
+// same seed drives the same refs, the same prices and the same lot sizes into each.
+template <typename Book>
 struct PopulatedBook {
-    OrderBook book;
+    Book book;
     std::vector<OrderRefNum> resting;
     Qty ask_qty_total{};
     Workload flow;
@@ -196,7 +240,7 @@ struct PopulatedBook {
     explicit PopulatedBook(int depth) { rebuild(depth); }
 
     void rebuild(int depth) {
-        book = OrderBook{};
+        book = Book{};
         resting.clear();
         ask_qty_total = 0;
         std::vector<Fill> fills;
@@ -217,6 +261,19 @@ struct PopulatedBook {
             }
         }
 
+        // A book that silently refused this flow would look spectacularly fast, and nothing in the
+        // timing loop would notice: ArrayOrderBook answers an off-grid or out-of-window price by
+        // returning 0 and resting nothing. Check the fixture actually holds what we think it does,
+        // once per rebuild, outside the timed region.
+        const std::size_t expected = static_cast<std::size_t>(depth) * kOrdersPerLevel * 2;
+        if (book.order_count() != expected) {
+            std::fprintf(stderr,
+                         "benchmark fixture is wrong: book holds %zu orders, expected %zu. The "
+                         "book is rejecting prices this workload assumes it accepts.\n",
+                         book.order_count(), expected);
+            std::abort();
+        }
+
         std::mt19937 shuffle_rng(kSeed);
         std::shuffle(resting.begin(), resting.end(), shuffle_rng);
     }
@@ -228,7 +285,7 @@ struct PopulatedBook {
 // The ruler itself
 // ============================================================================
 
-// Not a benchmark of the book — a measurement of the instrument. Reports the smallest non-zero
+// Not a benchmark of either book — a measurement of the instrument. Reports the smallest non-zero
 // gap two consecutive clock reads can produce, which is the granularity every other number here
 // is quantised to before batching divides it down.
 static void BM_OrderBook_ClockGranularity(benchmark::State& state) {
@@ -251,9 +308,10 @@ BENCHMARK(BM_OrderBook_ClockGranularity);
 // submit() — the pure insert path (no crossing, order rests)
 // ============================================================================
 
-static void BM_OrderBook_SubmitResting(benchmark::State& state) {
+template <typename Book>
+static void BM_SubmitResting(benchmark::State& state) {
     const int depth = static_cast<int>(state.range(0));
-    PopulatedBook fixture(depth);
+    PopulatedBook<Book> fixture(depth);
     std::vector<Fill> fills;
     std::vector<double> samples;
     samples.reserve(1u << 14);
@@ -282,7 +340,8 @@ static void BM_OrderBook_SubmitResting(benchmark::State& state) {
     }
     report(state, samples);
 }
-BENCHMARK(BM_OrderBook_SubmitResting)->Arg(10)->Arg(100)->Arg(1000);
+BENCHMARK_TEMPLATE(BM_SubmitResting, OrderBook)->Arg(10)->Arg(100)->Arg(1000);
+BENCHMARK_TEMPLATE(BM_SubmitResting, ArrayOrderBook)->Arg(10)->Arg(100)->Arg(1000);
 
 // ============================================================================
 // submit() — the matching path
@@ -292,9 +351,10 @@ BENCHMARK(BM_OrderBook_SubmitResting)->Arg(10)->Arg(100)->Arg(1000);
 // best ask level, and rests nothing. 100 shares is at or below the minimum lot, so one operation
 // never eats more than one resting order — the unit stays "one crossing order" rather than an
 // average over however many orders happened to sit at that price.
-static void BM_OrderBook_SubmitCrossing(benchmark::State& state) {
+template <typename Book>
+static void BM_SubmitCrossing(benchmark::State& state) {
     const int depth = static_cast<int>(state.range(0));
-    PopulatedBook fixture(depth);
+    PopulatedBook<Book> fixture(depth);
     std::vector<Fill> fills;
     std::vector<double> samples;
     samples.reserve(1u << 14);
@@ -323,7 +383,8 @@ static void BM_OrderBook_SubmitCrossing(benchmark::State& state) {
     }
     report(state, samples);
 }
-BENCHMARK(BM_OrderBook_SubmitCrossing)->Arg(10)->Arg(100)->Arg(1000);
+BENCHMARK_TEMPLATE(BM_SubmitCrossing, OrderBook)->Arg(10)->Arg(100)->Arg(1000);
+BENCHMARK_TEMPLATE(BM_SubmitCrossing, ArrayOrderBook)->Arg(10)->Arg(100)->Arg(1000);
 
 // ============================================================================
 // cancel() — the operation the book spends most of its life doing
@@ -331,9 +392,10 @@ BENCHMARK(BM_OrderBook_SubmitCrossing)->Arg(10)->Arg(100)->Arg(1000);
 
 // Refs are cancelled in shuffled order, so this measures the hash lookup plus an unlink from the
 // middle of a level, not a favourable front-of-list walk.
-static void BM_OrderBook_Cancel(benchmark::State& state) {
+template <typename Book>
+static void BM_Cancel(benchmark::State& state) {
     const int depth = static_cast<int>(state.range(0));
-    PopulatedBook fixture(depth);
+    PopulatedBook<Book> fixture(depth);
     std::vector<double> samples;
     samples.reserve(1u << 14);
 
@@ -348,7 +410,8 @@ static void BM_OrderBook_Cancel(benchmark::State& state) {
 
         const auto t0 = Clock::now();
         for (int i = 0; i < kBatchSize; ++i) {
-            benchmark::DoNotOptimize(fixture.book.cancel(fixture.resting[next + i]));
+            benchmark::DoNotOptimize(
+                fixture.book.cancel(fixture.resting[next + static_cast<std::size_t>(i)]));
         }
         const auto t1 = Clock::now();
 
@@ -357,4 +420,5 @@ static void BM_OrderBook_Cancel(benchmark::State& state) {
     }
     report(state, samples);
 }
-BENCHMARK(BM_OrderBook_Cancel)->Arg(10)->Arg(100)->Arg(1000);
+BENCHMARK_TEMPLATE(BM_Cancel, OrderBook)->Arg(10)->Arg(100)->Arg(1000);
+BENCHMARK_TEMPLATE(BM_Cancel, ArrayOrderBook)->Arg(10)->Arg(100)->Arg(1000);
