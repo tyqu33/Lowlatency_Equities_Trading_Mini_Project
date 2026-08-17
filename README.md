@@ -17,8 +17,8 @@ memory.
 >
 > | | |
 > |---|---|
-> | **Implemented, under test** | `hft::matching` — price-time-priority limit order book: add / cancel / match with partial fills, O(1) cancel, fills priced at the resting order. `hft::common` — fixed-point `Price` (tick arithmetic, parse/format, floor/ceil-to-tick) and power-of-two/alignment helpers. 56 GoogleTest cases, including property-based sweeps over the rounding invariants and a randomised sweep asserting the book never crosses. Builds clean with warnings-as-errors; ASan/UBSan and GitHub Actions CI wired up. |
-> | **In progress** | Benchmark harness for the book, then a tick-indexed replacement for the `std::map` price levels — measured before and after. |
+> | **Implemented, measured, under test** | `hft::matching` — price-time-priority limit order book: add / cancel / match with partial fills, O(1) cancel, fills priced at the resting order. **Two interchangeable price-level containers** — a `std::map` and a tick-indexed array with a per-side occupancy bitmap and an incrementally-maintained touch — run against the same 28-case typed test suite, which is what proves they behave identically. `hft::common` — fixed-point `Price` (tick arithmetic, parse/format, floor/ceil-to-tick) and power-of-two/alignment helpers. 84 GoogleTest cases, including property-based sweeps over the rounding invariants and a randomised sweep asserting the book never crosses. Builds clean with warnings-as-errors; ASan/UBSan and GitHub Actions CI wired up. |
+> | **In progress** | Intrusive free list over a pre-allocated order pool, to take the two per-order heap allocations off the resting path — the term the benchmarks below identify as dominant. |
 > | **Designed, not yet built** | `MDP` / `FH` / `STRAT` / `RISK` / `OG`, the OUCH+ITCH protocol boundary, and the shared-memory transport. Interfaces and wire structs are in place; bodies are stubs. |
 >
 > See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design and
@@ -110,8 +110,38 @@ Full plan and acceptance criteria: [`docs/ARCHITECTURE.md` §8](docs/ARCHITECTUR
 
 ## Benchmarks
 
-Nothing is published here yet — there is no measured number in this repository, and none will be
-quoted until the harness produces one.
+### Order book — three implementations, one workload
+
+Per-operation p50 in nanoseconds at 1000 price levels per side, batch-averaged. **v2** replaces v1's
+`std::map` price levels with a tick-indexed array + occupancy bitmap; **v2.1** adds an incrementally
+maintained touch. Same seeded workload, same fixture, one variable changed at a time.
+
+| Operation | v1 (`std::map`) | v2 (array + bitmap) | v2.1 (+ cached touch) |
+|---|---:|---:|---:|
+| `cancel` | 133.5 ns | 82.7 ns | **82.0 ns** (−38.5%) |
+| `submit` — rests | 72.9 ns | 59.3 ns | **56.6 ns** (−22.3%) |
+| `submit` — crosses | **14.3 ns** | 27.3 ns | 15.0 ns (parity) |
+
+`cancel`'s sensitivity to book depth over a 100× range falls from **+99%** to **+30%**.
+
+Two results are worth more than the improvements. **v2 regressed the matching path by 91%** — the
+array rescanned its bitmap from index 0 on every order, where `std::map` gets its leftmost node
+cached for free — and v2.1 exists to fix exactly that. And the measurement had to be established
+before it could be trusted: this platform's clock has a **41.67 ns** granularity, which makes
+per-operation timing meaningless at these magnitudes, so operations are timed in batches of 64
+(quantisation error 47% → 0.71%). Predictions were written down before each change; two of six were
+wrong, and the write-ups say which.
+
+- **[`docs/BENCHMARK-orderbook-v1.md`](docs/BENCHMARK-orderbook-v1.md)** — baseline, method, and the
+  predictions made before v2 was written
+- **[`docs/BENCHMARK-orderbook-v2.md`](docs/BENCHMARK-orderbook-v2.md)** — three-way comparison, the
+  regression and its diagnosis, and the limitations that remain
+
+Measured on a MacBook Air (Apple Silicon) under ordinary desktop load — not tuned bare metal. **The
+honest claim from a run like this is a relative improvement under identical conditions, never an
+absolute production latency figure.**
+
+### Still to be measured
 
 The three metrics this project exists to measure, once the corresponding components are built:
 
