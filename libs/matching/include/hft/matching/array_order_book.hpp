@@ -76,6 +76,7 @@ public:
         1'000'000 - static_cast<std::int64_t>(kCenterIndex) * kTickSize;
     static constexpr std::int64_t kCeilTicks =
         kBaseTicks + (kLevels - 1) * kTickSize;
+    static constexpr std::size_t kNone = kLevels;
 
     ArrayOrderBook() = default;
 
@@ -138,6 +139,12 @@ private:
     std::unordered_map<common::OrderRefNum, ArrayLocator> refMap;
 
     static bool index(common::Price price, std::size_t& out) noexcept;
+
+    // V2.1加touch hint
+    std::size_t best_bid_idx_{kNone};   // 买盘最优档的索引
+    std::size_t best_ask_idx_{kNone};   // 卖盘最优档的索引
+    void on_level_occupied(common::Side side, std::size_t idx) noexcept;
+    void on_level_emptied(common::Side side, std::size_t idx) noexcept;
 };
 
 }  // namespace hft::matching

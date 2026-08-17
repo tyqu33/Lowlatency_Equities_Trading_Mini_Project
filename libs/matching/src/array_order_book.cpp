@@ -39,6 +39,26 @@ namespace {
     }
 }  // namespace
 
+    void ArrayOrderBook::on_level_occupied(common::Side side, std::size_t idx) noexcept {
+        if(side == common::Side::Buy){
+            buy_occupied_[idx/64] |= (1ULL << (idx % 64));
+            if(best_bid_idx_ == kNone || idx > best_bid_idx_) best_bid_idx_ = idx;   // 买盘:越高越好
+        } else {
+            sell_occupied_[idx/64] |= (1ULL << (idx % 64));
+            if(best_ask_idx_ == kNone || idx < best_ask_idx_) best_ask_idx_ = idx;   // 卖盘:越低越好
+        }
+    }
+    void ArrayOrderBook::on_level_emptied(common::Side side, std::size_t idx) noexcept {
+        if(side == common::Side::Buy){
+            buy_occupied_[idx/64] &= ~(1ULL << (idx % 64));
+            if(best_bid_idx_ == idx)                                   // 只有空掉的正好是盘口才要重算
+                best_bid_idx_ = (idx == 0) ? kNone : next_down(buy_occupied_, idx - 1);
+        } else {
+            sell_occupied_[idx/64] &= ~(1ULL << (idx % 64));
+            if(best_ask_idx_ == idx)
+                best_ask_idx_ = next_up(sell_occupied_, idx + 1);       // idx+1 == kLevels 时 next_up 自己会返回哨兵
+        }
+    }
 
     bool ArrayOrderBook::index(common::Price price, std::size_t& out) noexcept{
         int64_t price_tick = price.ticks();
@@ -70,12 +90,9 @@ common::Qty ArrayOrderBook::submit(const OrderRequest& req, std::vector<Fill>& f
     if(!index(req.limit_price, idx)) return 0;
 
     if(req.side == common::Side::Buy){
-        std::size_t cur = next_up(sell_occupied_, 0);
+        std::size_t cur = best_ask_idx_;
 
-        while(remaining > 0 && cur <= idx){
-            // if(sell_occupied_[w] == 0) {w++; continue;}
-            // std::size_t bit = static_cast<std::size_t>(std::countr_zero(sell_occupied_[w]));
-            // std::size_t cur = w * 64 + bit;
+        while(remaining > 0 && cur <= idx && cur != kNone){
             Level& l = sell_levels_[cur];
 
             while(remaining > 0 && !l.orders.empty()){
@@ -94,11 +111,11 @@ common::Qty ArrayOrderBook::submit(const OrderRequest& req, std::vector<Fill>& f
                 }
             }
             if(l.orders.empty()){
-                sell_occupied_[cur/64] &= ~(1ULL << (cur % 64));
+                on_level_emptied(common::Side::Sell, cur); // sell_occupied_[cur/64] &= ~(1ULL << (cur % 64));
             }
-            cur = next_up(sell_occupied_, cur + 1);
+            cur = best_ask_idx_;// next_up(sell_occupied_, cur + 1);
         }
-        // // older version: traversal
+        // // older version V1: array traversal
         // while(remaining > 0 && cur <= idx){
         //     Level& l = sell_levels_[cur];
         //     if(l.orders.empty()) {cur++; continue;}
@@ -124,9 +141,9 @@ common::Qty ArrayOrderBook::submit(const OrderRequest& req, std::vector<Fill>& f
         // }
 
     } else if(req.side == common::Side::Sell) {
-        std::size_t cur = next_down(buy_occupied_, kLevels - 1);
+        std::size_t cur = best_bid_idx_; //next_down(buy_occupied_, kLevels - 1);
 
-        while(remaining > 0 && cur >= idx && cur != kLevels){
+        while(remaining > 0 && cur != kNone && cur >= idx){
             Level& l = buy_levels_[cur];
 
             while(remaining > 0 && !l.orders.empty()){
@@ -145,12 +162,12 @@ common::Qty ArrayOrderBook::submit(const OrderRequest& req, std::vector<Fill>& f
                 }
             }
             if(l.orders.empty()){
-                buy_occupied_[cur/64] &= ~(1ULL << (cur % 64)); // 置位, 清位
+                on_level_emptied(common::Side::Buy, cur); // buy_occupied_[cur/64] &= ~(1ULL << (cur % 64)); // 置位, 清位
             }
-            if(cur == 0) break;
-            cur = next_down(buy_occupied_, cur - 1);
+            // if(cur == 0) break;
+            cur = best_bid_idx_;  //next_down(buy_occupied_, cur - 1);
         }
-        // // older version: traversal
+        // // older version V1: array traversal
         // while(remaining > 0 && cur >= idx){
         //     Level& l = buy_levels_[cur];
         //     if(l.orders.empty()) {cur--; continue;}
@@ -184,18 +201,20 @@ common::Qty ArrayOrderBook::submit(const OrderRequest& req, std::vector<Fill>& f
         l.total_qty += remaining;
         l.orders.push_back({req.ref, remaining});            // std::list 分配一个节点     <- malloc
 
-        buy_occupied_[idx/64] |= (1ULL << (idx % 64));
+        // buy_occupied_[idx/64] |= (1ULL << (idx % 64));
         buy_orders_count++;
         refMap[req.ref] = {req.side, idx, --l.orders.end()}; // unordered_map 分配一个节点 <- malloc
+        on_level_occupied(req.side, idx);
         
     } else if(req.side == common::Side::Sell) {
         Level& l = sell_levels_[idx];
         l.total_qty += remaining;
         l.orders.push_back({req.ref, remaining});
 
-        sell_occupied_[idx/64] |= (1ULL << (idx % 64));
+        // sell_occupied_[idx/64] |= (1ULL << (idx % 64));
         sell_orders_count++;
         refMap[req.ref] = {req.side, idx, --l.orders.end()};
+        on_level_occupied(req.side, idx);
     }
     return remaining;
 }
@@ -221,7 +240,8 @@ common::Qty ArrayOrderBook::cancel(common::OrderRefNum ref) {
         refMap.erase(ref);
 
         if(lvl.orders.empty()){
-            buy_occupied_[idx/64] &= ~(1ULL << (idx % 64));
+            // buy_occupied_[idx/64] &= ~(1ULL << (idx % 64));
+            on_level_emptied(common::Side::Buy, idx);
         }
         
     } else if (side == common::Side::Sell){
@@ -232,7 +252,8 @@ common::Qty ArrayOrderBook::cancel(common::OrderRefNum ref) {
         refMap.erase(ref);
 
         if(lvl.orders.empty()){
-            sell_occupied_[idx/64] &= ~(1ULL << (idx % 64));
+            // sell_occupied_[idx/64] &= ~(1ULL << (idx % 64));
+            on_level_emptied(common::Side::Sell, idx);
         }
     }
     return qty;
@@ -240,14 +261,18 @@ common::Qty ArrayOrderBook::cancel(common::OrderRefNum ref) {
 
 // TODO(you): highest occupied bid level, or empty when there are none.
 std::optional<common::Price> ArrayOrderBook::best_bid() const noexcept { // bid = buy
-    for(std::size_t w = kLevels / 64; w-- > 0;){
-        if(buy_occupied_[w] == 0) continue;
-        std::size_t bit = static_cast<std::size_t>(63 - std::countl_zero(buy_occupied_[w]));
-        std::size_t idx = w * 64 + bit;
-        return common::Price::from_ticks(kBaseTicks + static_cast<std::int64_t>(idx) * kTickSize);
-    }
-    return std::nullopt;
-    // // older version: traversal
+    if(best_bid_idx_ == kNone) return std::nullopt;
+    return common::Price::from_ticks(kBaseTicks + static_cast<std::int64_t>(best_bid_idx_) * kTickSize);
+    // // V2.0
+    // for(std::size_t w = kLevels / 64; w-- > 0;){
+    //     if(buy_occupied_[w] == 0) continue;
+    //     std::size_t bit = static_cast<std::size_t>(63 - std::countl_zero(buy_occupied_[w]));
+    //     std::size_t idx = w * 64 + bit;
+    //     return common::Price::from_ticks(kBaseTicks + static_cast<std::int64_t>(idx) * kTickSize);
+    // }
+    // return std::nullopt;
+
+    // // older version V1: traversal
     // for(std::size_t i = kLevels; i-- > 0;){ // 用i>0;i--;则无符号数减到 0 以下会回绕成天文数字、死循环
     //     if(buy_levels_[i].total_qty != 0){
     //         return common::Price::from_ticks(kBaseTicks + static_cast<std::int64_t>(i) * kTickSize);
@@ -258,14 +283,18 @@ std::optional<common::Price> ArrayOrderBook::best_bid() const noexcept { // bid 
 
 // TODO(you): lowest occupied ask level, or empty when there are none.
 std::optional<common::Price> ArrayOrderBook::best_ask() const noexcept { // ask = sell
-    for(std::size_t w = 0; w < kLevels / 64; w++){
-        if(sell_occupied_[w] == 0) continue;
-        std::size_t bit = static_cast<std::size_t>(std::countr_zero(sell_occupied_[w]));
-        std::size_t idx = w * 64 + bit;
-        return common::Price::from_ticks(kBaseTicks + static_cast<std::int64_t>(idx) * kTickSize);
-    }
-    return std::nullopt;
-    // // older version: traversal
+    if(best_ask_idx_ == kNone) return std::nullopt;
+    return common::Price::from_ticks(kBaseTicks + static_cast<std::int64_t>(best_ask_idx_) * kTickSize);
+    // // V2.0
+    // for(std::size_t w = 0; w < kLevels / 64; w++){
+    //     if(sell_occupied_[w] == 0) continue;
+    //     std::size_t bit = static_cast<std::size_t>(std::countr_zero(sell_occupied_[w]));
+    //     std::size_t idx = w * 64 + bit;
+    //     return common::Price::from_ticks(kBaseTicks + static_cast<std::int64_t>(idx) * kTickSize);
+    // }
+    // return std::nullopt;
+
+    // // older version V1: traversal
     // for(std::size_t i = 0; i < kLevels; i++){
     //     if(sell_levels_[i].total_qty != 0){
     //         return common::Price::from_ticks(kBaseTicks + static_cast<std::int64_t>(i) * kTickSize);
