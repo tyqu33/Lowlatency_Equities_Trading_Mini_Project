@@ -31,6 +31,7 @@
 #include "hft/common/price.hpp"
 #include "hft/common/types.hpp"
 #include "hft/matching/array_order_book.hpp"
+#include "hft/matching/pool_order_book.hpp"
 #include "hft/matching/order_book.hpp"
 
 using hft::common::OrderRefNum;
@@ -43,9 +44,10 @@ using hft::matching::ArrayOrderBook;
 using hft::matching::Fill;
 using hft::matching::OrderBook;
 using hft::matching::OrderRequest;
+using hft::matching::PoolOrderBook;
 
 // Every implementation of the book. Index 0 is the baseline, 1 the array version.
-using BookImpls = ::testing::Types<OrderBook, ArrayOrderBook>;
+using BookImpls = ::testing::Types<OrderBook, ArrayOrderBook, PoolOrderBook>;
 
 namespace {
 

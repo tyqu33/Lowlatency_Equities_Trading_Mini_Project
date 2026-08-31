@@ -127,6 +127,7 @@
 #include "hft/common/types.hpp"
 #include "hft/matching/array_order_book.hpp"
 #include "hft/matching/order_book.hpp"
+#include "hft/matching/pool_order_book.hpp"
 
 namespace {
 
@@ -140,6 +141,7 @@ using hft::matching::ArrayOrderBook;
 using hft::matching::Fill;
 using hft::matching::OrderBook;
 using hft::matching::OrderRequest;
+using hft::matching::PoolOrderBook;
 
 // ---- Workload parameters ---------------------------------------------------
 
@@ -342,6 +344,7 @@ static void BM_SubmitResting(benchmark::State& state) {
 }
 BENCHMARK_TEMPLATE(BM_SubmitResting, OrderBook)->Arg(10)->Arg(100)->Arg(1000);
 BENCHMARK_TEMPLATE(BM_SubmitResting, ArrayOrderBook)->Arg(10)->Arg(100)->Arg(1000);
+BENCHMARK_TEMPLATE(BM_SubmitResting, PoolOrderBook)->Arg(10)->Arg(100)->Arg(1000);
 
 // ============================================================================
 // submit() — the matching path
@@ -385,6 +388,7 @@ static void BM_SubmitCrossing(benchmark::State& state) {
 }
 BENCHMARK_TEMPLATE(BM_SubmitCrossing, OrderBook)->Arg(10)->Arg(100)->Arg(1000);
 BENCHMARK_TEMPLATE(BM_SubmitCrossing, ArrayOrderBook)->Arg(10)->Arg(100)->Arg(1000);
+BENCHMARK_TEMPLATE(BM_SubmitCrossing, PoolOrderBook)->Arg(10)->Arg(100)->Arg(1000);
 
 // ============================================================================
 // cancel() — the operation the book spends most of its life doing
@@ -422,3 +426,4 @@ static void BM_Cancel(benchmark::State& state) {
 }
 BENCHMARK_TEMPLATE(BM_Cancel, OrderBook)->Arg(10)->Arg(100)->Arg(1000);
 BENCHMARK_TEMPLATE(BM_Cancel, ArrayOrderBook)->Arg(10)->Arg(100)->Arg(1000);
+BENCHMARK_TEMPLATE(BM_Cancel, PoolOrderBook)->Arg(10)->Arg(100)->Arg(1000);

@@ -2,7 +2,8 @@
 # A library rather than app code so that tests and benchmarks can link it.
 add_library(hft_matching STATIC
     src/order_book.cpp
-    src/array_order_book.cpp)
+    src/array_order_book.cpp
+    src/pool_order_book.cpp)
 add_library(hft::matching ALIAS hft_matching)
 target_include_directories(hft_matching PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(hft_matching PUBLIC hft::common)
