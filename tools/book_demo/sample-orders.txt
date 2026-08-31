@@ -1,0 +1,43 @@
+# tools/book_demo/sample-orders.txt
+# A short script that walks through every behaviour the book is supposed to have.
+# Run:  ./build/bin/hft_book_demo tools/book_demo/sample-orders.txt
+# The same script through --book map must produce identical output.
+
+# --- 1. Build a two-sided book -------------------------------------------
+# Nothing crosses yet: the best bid stays below the best ask.
+BUY   500 99.98
+BUY   300 99.99
+BUY   200 100.00
+SELL  400 100.02
+SELL  600 100.03
+
+# --- 2. Time priority within a level -------------------------------------
+# ref 6 joins ref 3 at 100.00 and queues BEHIND it.
+BUY   150 100.00
+
+# --- 3. A crossing sell, filled at the RESTING price ----------------------
+# This seller is willing to take 99.99, but the best bid is 100.00 — so it
+# prints at 100.00, not at the seller's limit. The resting buyer set the terms
+# by being there first. ref 3 is consumed before ref 6: first in, first served.
+SELL  250 99.99
+
+# --- 4. A partial fill keeps its place in line ---------------------------
+# 100.00 now holds the remainder of ref 3 (which is still at the front),
+# then ref 6. This sell takes what is left of ref 3 and starts on ref 6.
+SELL  100 100.00
+
+# --- 5. Walking multiple levels in price order ---------------------------
+# A large buy sweeps 100.02 completely, then continues into 100.03.
+BUY   800 100.03
+
+# --- 6. Cancel ------------------------------------------------------------
+CANCEL 1
+
+# Cancelling twice reports nothing the second time.
+CANCEL 1
+
+# --- 7. Outside the array book's window -----------------------------------
+# ArrayOrderBook covers $79.52-$120.47 on a one-cent grid. This is refused —
+# and note that `submit` returning 0 cannot distinguish "refused" from
+# "filled completely". Run with --book map to see the std::map book accept it.
+BUY   100 250.00

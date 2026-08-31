@@ -63,6 +63,7 @@ add_subdirectory(apps/participant/og)     # OG    — order gateway + OMS (= UFT
 # ---------------------------------------------------------------------------
 add_subdirectory(tools/sim_client)        # background order-flow generator
 add_subdirectory(tools/config_demo)       # smoke test for the CLI / TOML / fmt tooling
+add_subdirectory(tools/book_demo)         # replay an order script through the book, print each step
 
 # ---------------------------------------------------------------------------
 # Tests / benchmarks (opt-in; pull external deps only when enabled)
