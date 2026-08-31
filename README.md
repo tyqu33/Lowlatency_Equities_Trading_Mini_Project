@@ -17,8 +17,8 @@ memory.
 >
 > | | |
 > |---|---|
-> | **Implemented, measured, under test** | `hft::matching` — price-time-priority limit order book: add / cancel / match with partial fills, O(1) cancel, fills priced at the resting order. **Two interchangeable price-level containers** — a `std::map` and a tick-indexed array with a per-side occupancy bitmap and an incrementally-maintained touch — run against the same 28-case typed test suite, which is what proves they behave identically. `hft::common` — fixed-point `Price` (tick arithmetic, parse/format, floor/ceil-to-tick) and power-of-two/alignment helpers. 84 GoogleTest cases, including property-based sweeps over the rounding invariants and a randomised sweep asserting the book never crosses. Builds clean with warnings-as-errors; ASan/UBSan and GitHub Actions CI wired up. |
-> | **In progress** | Intrusive free list over a pre-allocated order pool, to take the two per-order heap allocations off the resting path — the term the benchmarks below identify as dominant. |
+> | **Implemented, measured, under test** | `hft::matching` — price-time-priority limit order book: add / cancel / match with partial fills, O(1) cancel, fills priced at the resting order. **Three interchangeable implementations** — a `std::map` baseline; a tick-indexed array with a per-side occupancy bitmap and an incrementally-maintained touch; and that plus pooled, intrusively-linked orders — all run against the same 28-case typed test suite, which is what proves they behave identically. `hft::common` — fixed-point `Price` (tick arithmetic, parse/format, floor/ceil-to-tick) and power-of-two/alignment helpers. 112 GoogleTest cases, including property-based sweeps over the rounding invariants and a randomised sweep asserting the book never crosses. Builds clean with warnings-as-errors; ASan/UBSan and GitHub Actions CI wired up. |
+> | **In progress** | Replacing the `unordered_map` ref index with direct indexing, to remove the last per-order heap allocation — the term the benchmarks below identify as dominant in what remains. |
 > | **Designed, not yet built** | `MDP` / `FH` / `STRAT` / `RISK` / `OG`, the OUCH+ITCH protocol boundary, and the shared-memory transport. Interfaces and wire structs are in place; bodies are stubs. |
 >
 > See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design and
@@ -62,6 +62,10 @@ cmake -S . -B build
 cmake --build build -j
 ./build/bin/hft_config_demo --config config/venue.toml -v   # tooling smoke test
 
+# See the order book work: replay a script of orders and print the book after each one.
+./build/bin/hft_book_demo tools/book_demo/sample-orders.txt
+./build/bin/hft_book_demo tools/book_demo/sample-orders.txt --book map    # or: --book pool
+
 # With tests (GoogleTest + GoogleMock) and benchmarks (Google Benchmark):
 cmake -S . -B build -DHFT_BUILD_TESTS=ON -DHFT_BUILD_BENCHMARKS=ON
 cmake --build build -j
@@ -91,7 +95,7 @@ hft/
 ├── apps/
 │   ├── venue/{me,mdp}/       # VENUE: matching engine, market-data publisher
 │   └── participant/{fh,strat,risk,og}/   # PARTICIPANT: feed handler, strategy, risk, gateway
-├── tools/                   # sim_client (order-flow gen) + config_demo (tooling smoke test)
+├── tools/                   # book_demo (replay orders, print the book) + sim_client + config_demo
 ├── tests/                   # GoogleTest + GoogleMock unit tests
 └── benchmarks/              # Google Benchmark microbenchmarks
 ```
@@ -112,30 +116,38 @@ Full plan and acceptance criteria: [`docs/ARCHITECTURE.md` §8](docs/ARCHITECTUR
 
 ### Order book — three implementations, one workload
 
-Per-operation p50 in nanoseconds at 1000 price levels per side, batch-averaged. **v2** replaces v1's
-`std::map` price levels with a tick-indexed array + occupancy bitmap; **v2.1** adds an incrementally
-maintained touch. Same seeded workload, same fixture, one variable changed at a time.
+Per-operation p50 in nanoseconds at 1000 price levels per side, batch-averaged. **v2** replaced v1's
+`std::map` price levels with a tick-indexed array + occupancy bitmap, **v2.1** added an incrementally
+maintained touch, and **v3** moved resting orders into a pre-allocated pool with intrusive links.
+Same seeded workload, same fixture, one variable changed at a time.
 
-| Operation | v1 (`std::map`) | v2 (array + bitmap) | v2.1 (+ cached touch) |
+| Operation | v1 (`std::map`) | v2.1 (array + bitmap + cached touch) | v3 (+ pooled intrusive orders) |
 |---|---:|---:|---:|
-| `cancel` | 133.5 ns | 82.7 ns | **82.0 ns** (−38.5%) |
-| `submit` — rests | 72.9 ns | 59.3 ns | **56.6 ns** (−22.3%) |
-| `submit` — crosses | **14.3 ns** | 27.3 ns | 15.0 ns (parity) |
+| `cancel` | 133.5 ns | 82.0 ns | **52.1 ns** (−61%) |
+| `submit` — rests | 71.6 ns | 56.6 ns | **39.1 ns** (−45%) |
+| `submit` — crosses | 14.3 ns | 15.0 ns | **11.7 ns** (−18%) |
 
-`cancel`'s sensitivity to book depth over a 100× range falls from **+99%** to **+30%**.
+`cancel`'s sensitivity to book depth over a 100x range falls from **+99%** to **+30%**, and its
+p99.9 from 1964 ns to **109 ns**.
 
 Two results are worth more than the improvements. **v2 regressed the matching path by 91%** — the
 array rescanned its bitmap from index 0 on every order, where `std::map` gets its leftmost node
 cached for free — and v2.1 exists to fix exactly that. And the measurement had to be established
 before it could be trusted: this platform's clock has a **41.67 ns** granularity, which makes
 per-operation timing meaningless at these magnitudes, so operations are timed in batches of 64
-(quantisation error 47% → 0.71%). Predictions were written down before each change; two of six were
-wrong, and the write-ups say which.
+(quantisation error 47% → 0.71%).
+
+Predictions were written down before each change. Eight so far, of which three were wrong and one
+half right; the write-ups say which, and what the wrong ones revealed. Each version changes exactly
+one thing, so the delta is attributable, and the raw benchmark output is kept alongside the analysis.
 
 - **[`docs/BENCHMARK-orderbook-v1.md`](docs/BENCHMARK-orderbook-v1.md)** — baseline, method, and the
   predictions made before v2 was written
-- **[`docs/BENCHMARK-orderbook-v2.md`](docs/BENCHMARK-orderbook-v2.md)** — three-way comparison, the
-  regression and its diagnosis, and the limitations that remain
+- **[`docs/BENCHMARK-orderbook-v2.md`](docs/BENCHMARK-orderbook-v2.md)** — the tick-indexed array,
+  the 91% regression and its diagnosis, and the cached touch that fixed it
+- **[`docs/BENCHMARK-orderbook-v3.md`](docs/BENCHMARK-orderbook-v3.md)** — pooled intrusive orders;
+  why the depth curve dropped without flattening, and why a path that never allocates got faster
+- **[`docs/benchmark-raw/`](docs/benchmark-raw)** — unedited tool output behind the tables
 
 Measured on a MacBook Air (Apple Silicon) under ordinary desktop load — not tuned bare metal. **The
 honest claim from a run like this is a relative improvement under identical conditions, never an

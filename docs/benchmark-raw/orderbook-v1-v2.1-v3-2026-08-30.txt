@@ -1,0 +1,42 @@
+Unable to determine clock rate from sysctl: hw.cpufrequency: No such file or directory
+This does not affect benchmark measurements, only the metadata output.
+***WARNING*** Failed to set thread affinity. Estimated CPU frequency may be incorrect.
+2026-08-30T22:58:14-04:00
+Running ./build/bin/hft_benchmarks
+Run on (8 X 24 MHz CPU s)
+CPU Caches:
+  L1 Data 64 KiB
+  L1 Instruction 128 KiB
+  L2 Unified 4096 KiB (x8)
+Load Average: 1.73, 1.89, 1.93
+-------------------------------------------------------------------------------------------------
+Benchmark                                       Time             CPU   Iterations UserCounters...
+-------------------------------------------------------------------------------------------------
+BM_OrderBook_ClockGranularity                32.0 ns         32.0 ns     21877940 batched_error_pct=0.711806 granularity_ns=41
+BM_SubmitResting<OrderBook>/10               5000 ns         4997 ns       140812 items_per_second=12.8082M/s max_ns=746.75 p50_ns=74.875 p99.9_ns=143.234 p99_ns=88.5469
+BM_SubmitResting<OrderBook>/100              4919 ns         4915 ns       142618 items_per_second=13.0201M/s max_ns=860.031 p50_ns=72.9062 p99.9_ns=196.609 p99_ns=182.938
+BM_SubmitResting<OrderBook>/1000             4926 ns         4922 ns       142406 items_per_second=13.0032M/s max_ns=1.49739k p50_ns=71.6094 p99.9_ns=1.01822k p99_ns=102.219
+BM_SubmitResting<ArrayOrderBook>/10          3914 ns         3913 ns       179092 items_per_second=16.3552M/s max_ns=1.23892k p50_ns=57.9375 p99.9_ns=111.969 p99_ns=67.7031
+BM_SubmitResting<ArrayOrderBook>/100         3944 ns         3940 ns       177921 items_per_second=16.2419M/s max_ns=1.12434k p50_ns=57.2969 p99.9_ns=176.438 p99_ns=165.359
+BM_SubmitResting<ArrayOrderBook>/1000        3947 ns         3944 ns       176834 items_per_second=16.2292M/s max_ns=1.88217k p50_ns=56.6406 p99.9_ns=968.094 p99_ns=85.2812
+BM_SubmitResting<PoolOrderBook>/10           2929 ns         2926 ns       240656 items_per_second=21.8712M/s max_ns=1.49414k p50_ns=42.3125 p99.9_ns=91.1406 p99_ns=50.125
+BM_SubmitResting<PoolOrderBook>/100          2809 ns         2807 ns       249618 items_per_second=22.8014M/s max_ns=788.406 p50_ns=40.3594 p99.9_ns=147.141 p99_ns=136.719
+BM_SubmitResting<PoolOrderBook>/1000         2245 ns         2244 ns       311486 items_per_second=28.518M/s max_ns=1.17708k p50_ns=39.0625 p99.9_ns=722.656 p99_ns=47.5312
+BM_SubmitCrossing<OrderBook>/10               994 ns          994 ns       703454 items_per_second=64.371M/s max_ns=820.312 p50_ns=14.3125 p99.9_ns=21.4844 p99_ns=18.8906
+BM_SubmitCrossing<OrderBook>/100              927 ns          927 ns       748815 items_per_second=69.0733M/s max_ns=658.859 p50_ns=13.6719 p99.9_ns=22.1406 p99_ns=18.875
+BM_SubmitCrossing<OrderBook>/1000             955 ns          954 ns       732440 items_per_second=67.1006M/s max_ns=746.734 p50_ns=14.3281 p99.9_ns=23.4375 p99_ns=19.5312
+BM_SubmitCrossing<ArrayOrderBook>/10         1052 ns         1051 ns       661382 items_per_second=60.912M/s max_ns=867.188 p50_ns=14.9688 p99.9_ns=22.1406 p99_ns=19.5312
+BM_SubmitCrossing<ArrayOrderBook>/100         994 ns          994 ns       660546 items_per_second=64.3886M/s max_ns=1.28125k p50_ns=14.9688 p99.9_ns=22.1406 p99_ns=19.5312
+BM_SubmitCrossing<ArrayOrderBook>/1000       1002 ns         1002 ns       696975 items_per_second=63.897M/s max_ns=653.641 p50_ns=14.9844 p99.9_ns=22.7812 p99_ns=20.1875
+BM_SubmitCrossing<PoolOrderBook>/10           850 ns          850 ns       819979 items_per_second=75.3349M/s max_ns=1.09636k p50_ns=11.7188 p99.9_ns=16.9375 p99_ns=14.9688
+BM_SubmitCrossing<PoolOrderBook>/100          789 ns          789 ns       892186 items_per_second=81.1454M/s max_ns=645.172 p50_ns=11.7188 p99.9_ns=16.9219 p99_ns=14.9688
+BM_SubmitCrossing<PoolOrderBook>/1000         768 ns          767 ns       905715 items_per_second=83.4149M/s max_ns=1.03645k p50_ns=11.7188 p99.9_ns=16.2812 p99_ns=14.3281
+BM_Cancel<OrderBook>/10                      4533 ns         4531 ns       154082 items_per_second=14.126M/s max_ns=1.14519k p50_ns=67.0625 p99.9_ns=123.703 p99_ns=78.7812
+BM_Cancel<OrderBook>/100                     6139 ns         6135 ns       112683 items_per_second=10.4327M/s max_ns=1.30923k p50_ns=95.0469 p99.9_ns=187.5 p99_ns=112.641
+BM_Cancel<OrderBook>/1000                    9129 ns         9121 ns        75101 items_per_second=7.01683M/s max_ns=3.02539k p50_ns=133.469 p99.9_ns=1.96419k p99_ns=227.219
+BM_Cancel<ArrayOrderBook>/10                 4174 ns         4170 ns       167778 items_per_second=15.3465M/s max_ns=1.87241k p50_ns=62.5 p99.9_ns=125 p99_ns=73.5781
+BM_Cancel<ArrayOrderBook>/100                4402 ns         4399 ns       158689 items_per_second=14.5501M/s max_ns=1.44922k p50_ns=69 p99.9_ns=133.453 p99_ns=80.7188
+BM_Cancel<ArrayOrderBook>/1000               5621 ns         5615 ns       124460 items_per_second=11.3976M/s max_ns=3.09505k p50_ns=82.0312 p99.9_ns=1.72395k p99_ns=134.766
+BM_Cancel<PoolOrderBook>/10                  2291 ns         2289 ns       303378 items_per_second=27.9631M/s max_ns=1.24545k p50_ns=32.5625 p99.9_ns=54.0312 p99_ns=38.4219
+BM_Cancel<PoolOrderBook>/100                 2570 ns         2567 ns       271715 items_per_second=24.9287M/s max_ns=1.05469k p50_ns=40.3594 p99.9_ns=64.4531 p99_ns=48.8281
+BM_Cancel<PoolOrderBook>/1000                3328 ns         3325 ns       209482 items_per_second=19.2487M/s max_ns=1.94988k p50_ns=52.0781 p99.9_ns=109.375 p99_ns=68.3594
