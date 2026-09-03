@@ -42,6 +42,7 @@
 #include "hft/common/types.hpp"
 #include "hft/matching/array_order_book.hpp"
 #include "hft/matching/order_book.hpp"
+#include "hft/matching/flat_order_book.hpp"
 #include "hft/matching/pool_order_book.hpp"
 
 namespace {
@@ -56,6 +57,7 @@ using hft::matching::ArrayOrderBook;
 using hft::matching::Fill;
 using hft::matching::OrderBook;
 using hft::matching::OrderRequest;
+using hft::matching::FlatOrderBook;
 using hft::matching::PoolOrderBook;
 
 constexpr std::int64_t kCent = 100;        // one cent, in Price's 1/10000 USD ticks
@@ -239,8 +241,8 @@ int main(int argc, char** argv) {
     std::string script_path;
     std::string which = "array";
     app.add_option("script", script_path, "Order script to replay")->required();
-    app.add_option("--book", which, "Which implementation: array (default), map, or pool")
-        ->check(CLI::IsMember({"array", "map", "pool"}));
+    app.add_option("--book", which, "Which implementation: array (default), map, pool, or flat")
+        ->check(CLI::IsMember({"array", "map", "pool", "flat"}));
     CLI11_PARSE(app, argc, argv);
 
     std::ifstream script(script_path);
@@ -254,6 +256,8 @@ int main(int argc, char** argv) {
         ok = run_script<OrderBook>(script, "OrderBook (std::map price levels)");
     } else if (which == "pool") {
         ok = run_script<PoolOrderBook>(script, "PoolOrderBook (pooled, intrusively linked orders)");
+    } else if (which == "flat") {
+        ok = run_script<FlatOrderBook>(script, "FlatOrderBook (+ open-addressed ref table)");
     } else {
         ok = run_script<ArrayOrderBook>(script, "ArrayOrderBook (tick-indexed array + bitmap)");
     }
