@@ -1,0 +1,51 @@
+Unable to determine clock rate from sysctl: hw.cpufrequency: No such file or directory
+This does not affect benchmark measurements, only the metadata output.
+***WARNING*** Failed to set thread affinity. Estimated CPU frequency may be incorrect.
+2026-09-02T22:42:09-04:00
+Running ./build/bin/hft_benchmarks
+Run on (8 X 24 MHz CPU s)
+CPU Caches:
+  L1 Data 64 KiB
+  L1 Instruction 128 KiB
+  L2 Unified 4096 KiB (x8)
+Load Average: 2.23, 2.44, 2.29
+-------------------------------------------------------------------------------------------------
+Benchmark                                       Time             CPU   Iterations UserCounters...
+-------------------------------------------------------------------------------------------------
+BM_OrderBook_ClockGranularity                32.1 ns         32.0 ns     21735215 granularity_ns=41
+BM_SubmitResting<OrderBook>/10              10169 ns        10164 ns        69119 items_per_second=12.5937M/s max_ns=396.484 p50_ns=75.1953 p99.9_ns=128.258 p99_ns=88.5391 quant_err_pct=0.432901
+BM_SubmitResting<OrderBook>/100              9847 ns         9842 ns        70996 items_per_second=13.0059M/s max_ns=414.383 p50_ns=72.5859 p99.9_ns=151.367 p99_ns=130.211 quant_err_pct=0.448463
+BM_SubmitResting<OrderBook>/1000             9826 ns         9817 ns        71396 items_per_second=13.0391M/s max_ns=2.52702k p50_ns=73.2422 p99.9_ns=509.117 p99_ns=130.539 quant_err_pct=0.444445
+BM_SubmitResting<ArrayOrderBook>/10          8023 ns         8017 ns        87513 items_per_second=15.9666M/s max_ns=947.586 p50_ns=57.9453 p99.9_ns=110.68 p99_ns=68.6875 quant_err_pct=0.561773
+BM_SubmitResting<ArrayOrderBook>/100         8052 ns         7911 ns        89350 items_per_second=16.1808M/s max_ns=45.3464k p50_ns=57.6172 p99.9_ns=148.438 p99_ns=113.281 quant_err_pct=0.564972
+BM_SubmitResting<ArrayOrderBook>/1000        7845 ns         7839 ns        89415 items_per_second=16.3295M/s max_ns=930.336 p50_ns=58.2656 p99.9_ns=517.906 p99_ns=99.9375 quant_err_pct=0.558685
+BM_SubmitResting<PoolOrderBook>/10           6030 ns         6025 ns       115487 items_per_second=21.2466M/s max_ns=547.203 p50_ns=42.3203 p99.9_ns=86.5859 p99_ns=49.8047 quant_err_pct=0.769184
+BM_SubmitResting<PoolOrderBook>/100          5622 ns         5618 ns       125242 items_per_second=22.7859M/s max_ns=564.453 p50_ns=40.6875 p99.9_ns=97.3281 p99_ns=91.7969 quant_err_pct=0.800052
+BM_SubmitResting<PoolOrderBook>/1000         4501 ns         4496 ns       156674 items_per_second=28.4705M/s max_ns=752.602 p50_ns=39.7109 p99.9_ns=424.156 p99_ns=49.1562 quant_err_pct=0.819727
+BM_SubmitResting<FlatOrderBook>/10           3755 ns         3753 ns       186647 items_per_second=34.1052M/s max_ns=722.656 p50_ns=24.7422 p99.9_ns=51.4297 p99_ns=28.9688 quant_err_pct=1.31565
+BM_SubmitResting<FlatOrderBook>/100          2960 ns         2958 ns       236575 items_per_second=43.275M/s max_ns=680.336 p50_ns=22.4609 p99.9_ns=51.7578 p99_ns=26.3672 quant_err_pct=1.44928
+BM_SubmitResting<FlatOrderBook>/1000         2795 ns         2793 ns       250713 items_per_second=45.8299M/s max_ns=833.656 p50_ns=21.8125 p99.9_ns=30.9219 p99_ns=25.7109 quant_err_pct=1.49236
+BM_SubmitCrossing<OrderBook>/10              1956 ns         1955 ns       359417 items_per_second=65.4596M/s max_ns=314.781 p50_ns=14 p99.9_ns=20.5078 p99_ns=17.5781 quant_err_pct=2.32515
+BM_SubmitCrossing<OrderBook>/100             1851 ns         1849 ns       382086 items_per_second=69.2123M/s max_ns=550.781 p50_ns=14 p99.9_ns=20.5078 p99_ns=17.5781 quant_err_pct=2.32515
+BM_SubmitCrossing<OrderBook>/1000            1929 ns         1908 ns       369481 items_per_second=67.0983M/s max_ns=37.6881k p50_ns=14.6484 p99.9_ns=37.4375 p99_ns=19.5312 quant_err_pct=2.22222
+BM_SubmitCrossing<ArrayOrderBook>/10         2089 ns         2088 ns       334272 items_per_second=61.2978M/s max_ns=597.336 p50_ns=14.9766 p99.9_ns=22.4609 p99_ns=18.5547 quant_err_pct=2.17354
+BM_SubmitCrossing<ArrayOrderBook>/100        1958 ns         1956 ns       356523 items_per_second=65.4341M/s max_ns=763.344 p50_ns=14.9688 p99.9_ns=22.1328 p99_ns=18.2344 quant_err_pct=2.17467
+BM_SubmitCrossing<ArrayOrderBook>/1000       1982 ns         1981 ns       354240 items_per_second=64.6223M/s max_ns=299.477 p50_ns=15.2969 p99.9_ns=21.8125 p99_ns=18.8828 quant_err_pct=2.12802
+BM_SubmitCrossing<PoolOrderBook>/10          1697 ns         1682 ns       417335 items_per_second=76.0992M/s max_ns=34.9268k p50_ns=11.7188 p99.9_ns=28.6406 p99_ns=14.3203 quant_err_pct=2.77778
+BM_SubmitCrossing<PoolOrderBook>/100         1546 ns         1545 ns       451354 items_per_second=82.8425M/s max_ns=354.164 p50_ns=11.7188 p99.9_ns=16.2734 p99_ns=14 quant_err_pct=2.77778
+BM_SubmitCrossing<PoolOrderBook>/1000        1511 ns         1510 ns       463217 items_per_second=84.787M/s max_ns=856.125 p50_ns=11.3984 p99.9_ns=16.6016 p99_ns=13.9922 quant_err_pct=2.85584
+BM_SubmitCrossing<FlatOrderBook>/10          1096 ns         1095 ns       640299 items_per_second=116.847M/s max_ns=399.734 p50_ns=7.16406 p99.9_ns=9.76562 p99_ns=8.46094 quant_err_pct=4.54381
+BM_SubmitCrossing<FlatOrderBook>/100          991 ns          991 ns       703178 items_per_second=129.213M/s max_ns=525.391 p50_ns=7.48438 p99.9_ns=9.76562 p99_ns=8.78906 quant_err_pct=4.34934
+BM_SubmitCrossing<FlatOrderBook>/1000         974 ns          973 ns       716494 items_per_second=131.485M/s max_ns=240.234 p50_ns=7.48438 p99.9_ns=9.76562 p99_ns=8.78906 quant_err_pct=4.34934
+BM_Cancel<OrderBook>/10                      8652 ns         8653 ns        80280 items_per_second=14.7933M/s max_ns=502.281 p50_ns=63.1562 p99.9_ns=116.531 p99_ns=74.875 quant_err_pct=0.515422
+BM_Cancel<OrderBook>/100                    12282 ns        12273 ns        56594 items_per_second=10.4297M/s max_ns=914.062 p50_ns=95.375 p99.9_ns=165.367 p99_ns=113.281 quant_err_pct=0.341307
+BM_Cancel<OrderBook>/1000                   18305 ns        18290 ns        38308 items_per_second=6.99834M/s max_ns=1.41373k p50_ns=134.109 p99.9_ns=1.08723k p99_ns=252.602 quant_err_pct=0.242728
+BM_Cancel<ArrayOrderBook>/10                 8143 ns         8139 ns        85731 items_per_second=15.7265M/s max_ns=450.516 p50_ns=58.9219 p99.9_ns=112.625 p99_ns=69.6641 quant_err_pct=0.552462
+BM_Cancel<ArrayOrderBook>/100                8904 ns         8896 ns        79160 items_per_second=14.3881M/s max_ns=989.906 p50_ns=69.6641 p99.9_ns=147.461 p99_ns=82.6875 quant_err_pct=0.467273
+BM_Cancel<ArrayOrderBook>/1000              11283 ns        11275 ns        61626 items_per_second=11.3527M/s max_ns=1.15006k p50_ns=82.6797 p99.9_ns=930.984 p99_ns=151.367 quant_err_pct=0.393714
+BM_Cancel<PoolOrderBook>/10                  4697 ns         4695 ns       148722 items_per_second=27.2605M/s max_ns=424.156 p50_ns=31.9062 p99.9_ns=65.7578 p99_ns=38.0859 quant_err_pct=1.02024
+BM_Cancel<PoolOrderBook>/100                 5160 ns         5157 ns       135473 items_per_second=24.8216M/s max_ns=572.594 p50_ns=40.3672 p99.9_ns=82.3594 p99_ns=48.5 quant_err_pct=0.8064
+BM_Cancel<PoolOrderBook>/1000                6776 ns         6768 ns       102798 items_per_second=18.9117M/s max_ns=1.03125k p50_ns=52.7344 p99.9_ns=154.617 p99_ns=70.9609 quant_err_pct=0.617284
+BM_Cancel<FlatOrderBook>/10                  1020 ns         1018 ns       689383 items_per_second=125.778M/s max_ns=319.664 p50_ns=3.25781 p99.9_ns=6.50781 p99_ns=4.23438 quant_err_pct=9.99201
+BM_Cancel<FlatOrderBook>/100                  639 ns          639 ns      1091295 items_per_second=200.47M/s max_ns=386.062 p50_ns=4.55469 p99.9_ns=7.15625 p99_ns=5.85938 quant_err_pct=7.14695
+BM_Cancel<FlatOrderBook>/1000                1003 ns         1002 ns       692781 items_per_second=127.755M/s max_ns=570.641 p50_ns=7.49219 p99.9_ns=15.2969 p99_ns=10.0859 quant_err_pct=4.34481

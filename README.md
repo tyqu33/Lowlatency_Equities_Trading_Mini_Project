@@ -17,8 +17,8 @@ memory.
 >
 > | | |
 > |---|---|
-> | **Implemented, measured, under test** | `hft::matching` — price-time-priority limit order book: add / cancel / match with partial fills, O(1) cancel, fills priced at the resting order. **Three interchangeable implementations** — a `std::map` baseline; a tick-indexed array with a per-side occupancy bitmap and an incrementally-maintained touch; and that plus pooled, intrusively-linked orders — all run against the same 28-case typed test suite, which is what proves they behave identically. `hft::common` — fixed-point `Price` (tick arithmetic, parse/format, floor/ceil-to-tick) and power-of-two/alignment helpers. 112 GoogleTest cases, including property-based sweeps over the rounding invariants and a randomised sweep asserting the book never crosses. Builds clean with warnings-as-errors; ASan/UBSan and GitHub Actions CI wired up. |
-> | **In progress** | Replacing the `unordered_map` ref index with direct indexing, to remove the last per-order heap allocation — the term the benchmarks below identify as dominant in what remains. |
+> | **Implemented, measured, under test** | `hft::matching` — price-time-priority limit order book: add / cancel / match with partial fills, O(1) cancel, fills priced at the resting order. **Four interchangeable implementations** — a `std::map` baseline; a tick-indexed array with a per-side occupancy bitmap and an incrementally-maintained touch; that plus pooled, intrusively-linked orders; and that plus an open-addressed reference index, which leaves nothing on either hot path that allocates — all run against the same 28-case typed test suite, which is what proves they behave identically. `hft::common` — fixed-point `Price` (tick arithmetic, parse/format, floor/ceil-to-tick) and power-of-two/alignment helpers. 140 GoogleTest cases, including property-based sweeps over the rounding invariants and a randomised sweep asserting the book never crosses. Builds clean with warnings-as-errors; ASan/UBSan and GitHub Actions CI wired up. |
+> | **In progress** | Deciding whether to keep optimising the book or start on the components it was built to sit inside. Four rounds in, the remaining questions are narrow: what tombstones cost over a long session, and what the crossing path's last 7.5 ns is made of. |
 > | **Designed, not yet built** | `MDP` / `FH` / `STRAT` / `RISK` / `OG`, the OUCH+ITCH protocol boundary, and the shared-memory transport. Interfaces and wire structs are in place; bodies are stubs. |
 >
 > See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design and
@@ -64,7 +64,7 @@ cmake --build build -j
 
 # See the order book work: replay a script of orders and print the book after each one.
 ./build/bin/hft_book_demo tools/book_demo/sample-orders.txt
-./build/bin/hft_book_demo tools/book_demo/sample-orders.txt --book map    # or: --book pool
+./build/bin/hft_book_demo tools/book_demo/sample-orders.txt --book map    # or: pool, flat
 
 # With tests (GoogleTest + GoogleMock) and benchmarks (Google Benchmark):
 cmake -S . -B build -DHFT_BUILD_TESTS=ON -DHFT_BUILD_BENCHMARKS=ON
@@ -121,14 +121,16 @@ Per-operation p50 in nanoseconds at 1000 price levels per side, batch-averaged. 
 maintained touch, and **v3** moved resting orders into a pre-allocated pool with intrusive links.
 Same seeded workload, same fixture, one variable changed at a time.
 
-| Operation | v1 (`std::map`) | v2.1 (array + bitmap + cached touch) | v3 (+ pooled intrusive orders) |
-|---|---:|---:|---:|
-| `cancel` | 133.5 ns | 82.0 ns | **52.1 ns** (−61%) |
-| `submit` — rests | 71.6 ns | 56.6 ns | **39.1 ns** (−45%) |
-| `submit` — crosses | 14.3 ns | 15.0 ns | **11.7 ns** (−18%) |
+Sustained throughput at 1000 price levels per side, and per-operation p50 in nanoseconds.
 
-`cancel`'s sensitivity to book depth over a 100x range falls from **+99%** to **+30%**, and its
-p99.9 from 1964 ns to **109 ns**.
+| Operation | v1 (`std::map`) | v2.1 (array + bitmap) | v3 (+ order pool) | v4 (+ flat ref table) |
+|---|---:|---:|---:|---:|
+| `cancel` | 7.0 M/s · 134 ns | 11.4 M/s · 83 ns | 18.9 M/s · 53 ns | **127.8 M/s · ~7.5 ns** |
+| `submit` — rests | 13.0 M/s · 73 ns | 16.3 M/s · 58 ns | 28.5 M/s · 40 ns | **45.8 M/s · ~22 ns** |
+| `submit` — crosses | 67.1 M/s · 15 ns | 64.6 M/s · 15 ns | 84.8 M/s · 11 ns | **131.5 M/s · ~7.5 ns** |
+
+`cancel` is **18.3x** v1's throughput, its growth from depth 10 to 1000 fell from +71 ns to +4 ns,
+and its p99.9 from 1087 ns to 15 ns. v4 allocates nothing on either hot path.
 
 Two results are worth more than the improvements. **v2 regressed the matching path by 91%** — the
 array rescanned its bitmap from index 0 on every order, where `std::map` gets its leftmost node
@@ -137,7 +139,14 @@ before it could be trusted: this platform's clock has a **41.67 ns** granularity
 per-operation timing meaningless at these magnitudes, so operations are timed in batches of 64
 (quantisation error 47% → 0.71%).
 
-Predictions were written down before each change. Eight so far, of which three were wrong and one
+A third result is about the measurement rather than the book. By v4 the operations had got 18x
+faster than the harness was designed for: a batch of 64 spanned only ~11 ticks of that 41.67 ns
+clock, a 9% quantisation error, and the hardcoded error counter was still reporting 0.71%. The batch
+is now 128 and every benchmark computes its own quantisation error from its own measured p50, which
+is why the fastest figures above are quoted to two significant figures and why throughput — measured
+across the whole run rather than per batch — is the column to trust.
+
+Predictions were written down before each change. Eleven so far, of which three were wrong and one
 half right; the write-ups say which, and what the wrong ones revealed. Each version changes exactly
 one thing, so the delta is attributable, and the raw benchmark output is kept alongside the analysis.
 
@@ -147,6 +156,8 @@ one thing, so the delta is attributable, and the raw benchmark output is kept al
   the 91% regression and its diagnosis, and the cached touch that fixed it
 - **[`docs/BENCHMARK-orderbook-v3.md`](docs/BENCHMARK-orderbook-v3.md)** — pooled intrusive orders;
   why the depth curve dropped without flattening, and why a path that never allocates got faster
+- **[`docs/BENCHMARK-orderbook-v4.md`](docs/BENCHMARK-orderbook-v4.md)** — the last allocation
+  removed, the depth curve finally flat, and the harness repair that had to come first
 - **[`docs/benchmark-raw/`](docs/benchmark-raw)** — unedited tool output behind the tables
 
 Measured on a MacBook Air (Apple Silicon) under ordinary desktop load — not tuned bare metal. **The
