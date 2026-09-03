@@ -157,7 +157,15 @@ constexpr Qty kMaxLot = 1000;
 constexpr unsigned kSeed = 20260814;  // fixed: a surprising result must be reproducible
 
 constexpr int kOrdersPerLevel = 10;
-constexpr int kBatchSize = 64;  // see "WHY OPERATIONS ARE TIMED IN BATCHES" above
+
+// Measured by BM_OrderBook_ClockGranularity; Apple Silicon's 24 MHz timebase gives 1/24MHz.
+constexpr double kClockGranularityNs = 41.6667;
+// See "WHY OPERATIONS ARE TIMED IN BATCHES" above. 128 rather than 64 because the operations being
+// measured have got much faster: at v4's ~7 ns a batch of 64 spans only ~11 ticks of a 41.67 ns
+// clock, which is a 9% quantisation error — the very problem batching exists to remove. This is the
+// ceiling, not a free choice: the shallowest fixture holds 10 levels x 10 orders x 2 sides = 200
+// resting orders, and a batch may not exceed that.
+constexpr int kBatchSize = 128;
 
 // ---- Percentiles -----------------------------------------------------------
 
@@ -178,6 +186,13 @@ void report(benchmark::State& state, std::vector<double>& samples) {
     state.counters["p99_ns"] = percentile(samples, 0.99);
     state.counters["p99.9_ns"] = percentile(samples, 0.999);
     state.counters["max_ns"] = samples.empty() ? 0.0 : samples.back();
+
+    // What the clock's granularity is worth AT THIS OPERATION'S SPEED, rather than at the speed
+    // assumed when the harness was written. A batch of kBatchSize operations at p50 ns each spans
+    // kBatchSize * p50 ns; one clock tick is kClockGranularityNs of that. Reported per benchmark
+    // because the four implementations differ by 18x, so a single figure cannot describe them all.
+    const double batch_span = static_cast<double>(kBatchSize) * state.counters["p50_ns"];
+    state.counters["quant_err_pct"] = batch_span > 0.0 ? 100.0 * kClockGranularityNs / batch_span : 0.0;
     state.SetItemsProcessed(state.iterations() * kBatchSize);
 }
 
@@ -303,8 +318,9 @@ static void BM_OrderBook_ClockGranularity(benchmark::State& state) {
         }
     }
     state.counters["granularity_ns"] = smallest_nonzero;
-    state.counters["batched_error_pct"] =
-        100.0 * smallest_nonzero / (static_cast<double>(kBatchSize) * 90.0);
+    // Deliberately NOT a single "error" figure any more. What one tick is worth depends entirely on
+    // how fast the operation being measured is, and after v4 the four books span 18x. Each
+    // benchmark reports its own `quant_err_pct` instead.
 }
 BENCHMARK(BM_OrderBook_ClockGranularity);
 
